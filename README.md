@@ -309,41 +309,66 @@ VITE_API_URL=http://localhost:8080
 
 ## 💻 Running Locally
 
-1. Clone Repository
+### 1. Clone Repository
+
+```bash
 git clone https://github.com/AKSHITAMODA/ticket-booking-system.git
 cd ticket-booking-system
-2. Start PostgreSQL
+```
+
+### 2. Start PostgreSQL
 
 Create the database:
 
+```sql
 CREATE DATABASE ticket_booking;
-3. Run Backend
+```
+
+### 3. Run Backend
+
+```bash
 cd backend
+```
 
-Windows:
+#### Windows
 
+```powershell
 .\mvnw.cmd spring-boot:run
+```
 
-Linux/macOS:
+#### Linux/macOS
 
+```bash
 ./mvnw spring-boot:run
+```
 
 Backend:
 
+```text
 http://localhost:8080
-4. Run Frontend
+```
+
+### 4. Run Frontend
 
 Open another terminal:
 
+```bash
 cd frontend
 npm install
 npm run dev
+```
 
 Frontend:
 
+```text
 http://localhost:5173
+```
+
+---
+
 ## ☁️ Deployment
-Frontend — Vercel
+
+### Frontend — Vercel
 
 Production frontend:
 
@@ -351,8 +376,11 @@ https://ticket-booking-system-two-iota.vercel.app/
 
 Vercel environment variable:
 
+```env
 VITE_API_URL=https://ticket-booking-systemm.onrender.com
-Backend — Render
+```
+
+### Backend — Render
 
 Production backend:
 
@@ -360,51 +388,58 @@ https://ticket-booking-systemm.onrender.com/
 
 Render environment variables:
 
+```text
 DATABASE_URL
 DATABASE_USERNAME
 DATABASE_PASSWORD
 RAZORPAY_KEY_ID
 RAZORPAY_KEY_SECRET
+```
 
 The backend uses Render's dynamically assigned port:
 
+```properties
 server.port=${PORT:8080}
+```
 
+---
 
 ## 🔒 Security
 
 The application implements:
 
-JWT authentication
-Stateless Spring Security
-Role-based access control
-Password hashing
-Protected booking APIs
-Protected payment APIs
-CORS configuration
-Razorpay signature verification
-Environment-based secret management
-Pessimistic database locking
+- JWT authentication
+- Stateless Spring Security
+- Role-based access control
+- Password hashing
+- Protected booking APIs
+- Protected payment APIs
+- CORS configuration
+- Razorpay signature verification
+- Environment-based secret management
+- Pessimistic database locking
 
+---
 
 ## 📌 Future Improvements
-QR-code based tickets
-PDF ticket generation
-Email booking confirmation
-Event search and filtering
-Event categories
-Pagination
-Booking analytics
-Automated refunds
-Redis caching
-Docker support
-CI/CD pipeline
 
+- QR-code based tickets
+- PDF ticket generation
+- Email booking confirmation
+- Event search and filtering
+- Event categories
+- Pagination
+- Booking analytics
+- Automated refunds
+- Redis caching
+- Docker support
+- CI/CD pipeline
+
+---
 
 ## 👩‍💻 Author
 
-Akshita Moda
-Student at VIT Vellore
+### Akshita Moda
 
-B.Tech Computer Science
+B.Tech Computer Science  
 VIT Vellore
