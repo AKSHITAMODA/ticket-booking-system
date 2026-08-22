@@ -153,7 +153,7 @@ ticket-booking-system/
 The application uses JWT authentication with Spring Security.
 
 After login, the JWT token is stored on the frontend and automatically attached to API requests using an Axios interceptor.
-
+```text
 User
   │
   │ Login
@@ -170,9 +170,11 @@ JWT Authentication Filter
   │
   ▼
 Protected API
+```
 
 
 ## 🎫 Booking Flow
+```text
 User selects event
         │
         ▼
@@ -195,7 +197,7 @@ Create Booking
         │
         ▼
 Update Available Seats
-
+```
 
 ## 💳 Razorpay Integration
 
