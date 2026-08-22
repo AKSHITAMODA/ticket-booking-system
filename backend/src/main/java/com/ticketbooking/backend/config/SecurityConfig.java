@@ -43,10 +43,10 @@ public class SecurityConfig {
 
                         .requestMatchers(
                                 "/api/health",
-                                "/api/auth/register",
-                                "/api/auth/login"
                                 "/actuator/health",
                                 "/actuator/info",
+                                "/api/auth/register",
+                                "/api/auth/login"
                         ).permitAll()
 
                         // Anyone can view events
