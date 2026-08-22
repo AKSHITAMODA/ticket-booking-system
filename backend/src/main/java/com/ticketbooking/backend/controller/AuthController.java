@@ -130,6 +130,42 @@ public class AuthController {
                     );
         }
     }
+    //--------------auth-----------------
+    @PostMapping("/create-organiser")
+public ResponseEntity<?> createOrganiser(
+        @RequestBody RegisterRequest request) {
+
+    try {
+
+        User user = userService.createOrganiser(
+                request.name(),
+                request.email(),
+                request.password()
+        );
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(
+                        Map.of(
+                                "message", "Organiser created successfully",
+                                "id", user.getId(),
+                                "name", user.getName(),
+                                "email", user.getEmail(),
+                                "role", user.getRole().name()
+                        )
+                );
+
+    } catch (RuntimeException e) {
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(
+                        Map.of(
+                                "error", e.getMessage()
+                        )
+                );
+    }
+}
 
     // ================= CURRENT USER =================
 
