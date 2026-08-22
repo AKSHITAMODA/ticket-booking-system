@@ -6,7 +6,6 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 
 export default function EventDetails() {
-
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -22,41 +21,28 @@ export default function EventDetails() {
   // ================= FETCH EVENT =================
 
   useEffect(() => {
-
     const fetchEvent = async () => {
-
       try {
-
-        const response = await api.get(
-          `/api/events/${id}`
-        );
-
+        const response = await api.get(`/api/events/${id}`);
         setEvent(response.data);
-
       } catch (err) {
-
         console.error(err);
 
         setError(
           err.response?.data?.error ||
-          "Unable to load event"
+            "Unable to load event"
         );
-
       } finally {
-
         setLoading(false);
-
       }
     };
 
     fetchEvent();
-
   }, [id]);
 
   // ================= BOOKING =================
 
   const handleBooking = async () => {
-
     if (!user) {
       navigate("/login");
       return;
@@ -80,7 +66,6 @@ export default function EventDetails() {
     setBookingMessage("");
 
     try {
-
       const response = await api.post(
         "/api/bookings",
         {
@@ -94,7 +79,6 @@ export default function EventDetails() {
         response.data
       );
 
-      // Update available seats immediately
       setEvent((prev) => ({
         ...prev,
         availableSeats:
@@ -105,11 +89,9 @@ export default function EventDetails() {
         "Booking confirmed successfully!"
       );
 
-      // Reset ticket count
       setTickets(1);
 
     } catch (err) {
-
       console.error(
         "Booking error:",
         err
@@ -117,34 +99,39 @@ export default function EventDetails() {
 
       setBookingMessage(
         err.response?.data?.error ||
-        "Booking failed. Please try again."
+          "Booking failed. Please try again."
       );
 
     } finally {
-
       setBooking(false);
-
     }
   };
 
   // ================= LOADING =================
 
   if (loading) {
-
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
         <Navbar />
 
-        <div className="flex justify-center items-center py-32">
+        <div className="max-w-7xl mx-auto px-6 py-20">
 
-          <div className="text-center">
+          <div className="animate-pulse">
 
-            <div className="w-10 h-10 mx-auto border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="h-8 w-32 bg-slate-200 dark:bg-slate-800 rounded-lg" />
 
-            <p className="mt-4 text-slate-500">
-              Loading event...
-            </p>
+            <div className="mt-8 h-14 w-2/3 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+
+            <div className="mt-4 h-6 w-1/3 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+
+            <div className="mt-12 grid lg:grid-cols-3 gap-8">
+
+              <div className="lg:col-span-2 h-96 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800" />
+
+              <div className="h-96 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800" />
+
+            </div>
 
           </div>
 
@@ -157,29 +144,32 @@ export default function EventDetails() {
   // ================= ERROR =================
 
   if (error || !event) {
-
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
         <Navbar />
 
-        <div className="max-w-4xl mx-auto px-6 py-20">
+        <div className="max-w-4xl mx-auto px-6 py-24">
 
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+          <div className="bg-white dark:bg-slate-900 border border-red-200 dark:border-red-900 rounded-3xl p-10 text-center shadow-sm">
 
-            <h2 className="text-2xl font-bold text-red-700">
+            <div className="mx-auto w-20 h-20 rounded-2xl bg-red-50 dark:bg-red-950/40 flex items-center justify-center text-4xl">
+              🎫
+            </div>
+
+            <h2 className="mt-6 text-3xl font-black text-slate-900 dark:text-white">
               Event not found
             </h2>
 
-            <p className="mt-2 text-red-600">
+            <p className="mt-3 text-slate-500 dark:text-slate-400">
               {error || "This event does not exist."}
             </p>
 
             <button
               onClick={() => navigate("/events")}
-              className="mt-6 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700"
+              className="mt-7 px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition"
             >
-              Back to Events
+              ← Back to Events
             </button>
 
           </div>
@@ -195,215 +185,386 @@ export default function EventDetails() {
   const totalPrice =
     Number(event.price) * tickets;
 
+  const formattedDate = new Date(
+    event.eventDate
+  ).toLocaleDateString(
+    "en-IN",
+    {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    }
+  );
+
+  const formattedDateTime = new Date(
+    event.eventDate
+  ).toLocaleString(
+    "en-IN",
+    {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }
+  );
+
   // ================= PAGE =================
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
 
       <Navbar />
 
       {/* ================= HERO ================= */}
 
-      <section className="bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700">
+      <section className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-purple-700 to-indigo-950 text-white">
 
-        <div className="max-w-7xl mx-auto px-6 py-16">
+        <div className="absolute -top-32 -right-32 w-96 h-96 rounded-full bg-purple-400/20 blur-3xl" />
+
+        <div className="absolute -bottom-40 -left-20 w-96 h-96 rounded-full bg-indigo-400/20 blur-3xl" />
+
+        <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-16 md:py-20">
 
           <button
             onClick={() => navigate("/events")}
-            className="text-white/80 hover:text-white mb-8"
+            className="inline-flex items-center gap-2 text-white/75 hover:text-white font-medium transition"
           >
             ← Back to events
           </button>
 
-          <p className="text-indigo-100 font-medium">
+          <div className="mt-10 grid lg:grid-cols-3 gap-10 items-end">
 
-            {new Date(
-              event.eventDate
-            ).toLocaleDateString(
-              "en-IN",
-              {
-                weekday: "long",
-                day: "numeric",
-                month: "long",
-                year: "numeric",
-              }
-            )}
+            {/* EVENT TITLE */}
 
-          </p>
+            <div className="lg:col-span-2">
 
-          <h1 className="text-5xl font-black text-white mt-3">
-            {event.title}
-          </h1>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 border border-white/20 text-sm font-semibold">
+                🎟️ Upcoming Event
+              </div>
 
-          <p className="text-indigo-100 text-lg mt-4">
-            {event.venue}
-          </p>
+              <p className="mt-6 text-indigo-200 font-semibold">
+                {formattedDate}
+              </p>
+
+              <h1 className="mt-3 text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
+                {event.title}
+              </h1>
+
+              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-indigo-100">
+
+                <span className="flex items-center gap-2">
+                  📍 {event.venue}
+                </span>
+
+                <span className="flex items-center gap-2">
+                  🕐 {formattedDateTime}
+                </span>
+
+              </div>
+
+            </div>
+
+            {/* PRICE */}
+
+            <div className="lg:text-right">
+
+              <p className="text-sm text-indigo-200">
+                Tickets from
+              </p>
+
+              <p className="mt-1 text-4xl font-black">
+                ₹{event.price}
+              </p>
+
+              <p className="mt-1 text-sm text-indigo-200">
+                per ticket
+              </p>
+
+            </div>
+
+          </div>
 
         </div>
 
       </section>
 
+
       {/* ================= CONTENT ================= */}
 
-      <main className="max-w-7xl mx-auto px-6 py-12">
+      <main className="max-w-7xl mx-auto px-6 lg:px-8 py-12 md:py-16">
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-          {/* ================= EVENT INFORMATION ================= */}
+          {/* ================= LEFT ================= */}
 
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 space-y-8">
 
-            <div className="bg-white rounded-2xl border border-slate-200 p-8">
+            {/* ABOUT */}
 
-              <h2 className="text-2xl font-bold text-slate-900">
-                About this event
-              </h2>
+            <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-7 md:p-9 shadow-sm transition-colors">
 
-              <p className="mt-5 text-slate-600 leading-7">
-                {event.description}
+              <div className="flex items-center gap-3">
+
+                <div className="w-11 h-11 rounded-xl bg-indigo-100 dark:bg-indigo-950/60 flex items-center justify-center text-xl">
+                  ✨
+                </div>
+
+                <div>
+
+                  <p className="text-xs uppercase tracking-wider font-bold text-indigo-600 dark:text-indigo-400">
+                    Experience
+                  </p>
+
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                    About this event
+                  </h2>
+
+                </div>
+
+              </div>
+
+              <p className="mt-7 text-slate-600 dark:text-slate-300 leading-8 text-base">
+                {event.description ||
+                  "Join us for an unforgettable experience."}
               </p>
 
-              {/* EVENT DETAILS */}
+            </section>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-8">
 
-                <div className="rounded-xl bg-slate-50 p-5">
+            {/* EVENT DETAILS */}
 
-                  <p className="text-sm text-slate-400">
+            <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-7 md:p-9 shadow-sm transition-colors">
+
+              <div className="flex items-center gap-3">
+
+                <div className="w-11 h-11 rounded-xl bg-purple-100 dark:bg-purple-950/60 flex items-center justify-center text-xl">
+                  📋
+                </div>
+
+                <div>
+
+                  <p className="text-xs uppercase tracking-wider font-bold text-purple-600 dark:text-purple-400">
+                    Information
+                  </p>
+
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+                    Event Details
+                  </h2>
+
+                </div>
+
+              </div>
+
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
+
+                {/* VENUE */}
+
+                <div className="group rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 transition">
+
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
+                    📍
+                  </div>
+
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
                     Venue
                   </p>
 
-                  <p className="font-semibold text-slate-900 mt-1">
-                    📍 {event.venue}
+                  <p className="mt-1 font-bold text-slate-900 dark:text-white">
+                    {event.venue}
                   </p>
 
                 </div>
 
-                <div className="rounded-xl bg-slate-50 p-5">
 
-                  <p className="text-sm text-slate-400">
-                    Event Date
+                {/* DATE */}
+
+                <div className="group rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5 hover:border-purple-200 dark:hover:border-purple-700 hover:bg-purple-50/50 dark:hover:bg-purple-950/30 transition">
+
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
+                    📅
+                  </div>
+
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Date & Time
                   </p>
 
-                  <p className="font-semibold text-slate-900 mt-1">
-
-                    📅{" "}
-                    {new Date(
-                      event.eventDate
-                    ).toLocaleString("en-IN")}
-
-                  </p>
-
-                </div>
-
-                <div className="rounded-xl bg-slate-50 p-5">
-
-                  <p className="text-sm text-slate-400">
-                    Total Seats
-                  </p>
-
-                  <p className="font-semibold text-slate-900 mt-1">
-                    🪑 {event.totalSeats}
+                  <p className="mt-1 font-bold text-slate-900 dark:text-white">
+                    {formattedDateTime}
                   </p>
 
                 </div>
 
-                <div className="rounded-xl bg-slate-50 p-5">
 
-                  <p className="text-sm text-slate-400">
-                    Available Seats
+                {/* TOTAL SEATS */}
+
+                <div className="group rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5 hover:border-indigo-200 dark:hover:border-indigo-700 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/30 transition">
+
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
+                    🪑
+                  </div>
+
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Total Capacity
                   </p>
 
-                  <p className="font-semibold text-green-600 mt-1">
-                    {event.availableSeats} available
+                  <p className="mt-1 font-bold text-slate-900 dark:text-white">
+                    {event.totalSeats} seats
+                  </p>
+
+                </div>
+
+
+                {/* AVAILABLE */}
+
+                <div className="group rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5 hover:border-emerald-200 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 transition">
+
+                  <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
+                    🎫
+                  </div>
+
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-400 dark:text-slate-500">
+                    Availability
+                  </p>
+
+                  <p
+                    className={`mt-1 font-bold ${
+                      event.availableSeats > 0
+                        ? "text-emerald-600 dark:text-emerald-400"
+                        : "text-red-500 dark:text-red-400"
+                    }`}
+                  >
+                    {event.availableSeats > 0
+                      ? `${event.availableSeats} seats available`
+                      : "Sold out"}
                   </p>
 
                 </div>
 
               </div>
 
-              {/* ================= ORGANISER ================= */}
+            </section>
 
-              {event.organiser && (
 
-                <div className="mt-8 pt-8 border-t border-slate-200">
+            {/* ORGANISER */}
 
-                  <h3 className="font-bold text-lg">
-                    Organised by
-                  </h3>
+            {event.organiser && (
+              <section className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-7 md:p-9 shadow-sm transition-colors">
 
-                  <div className="mt-4 flex items-center gap-4">
+                <p className="text-xs uppercase tracking-wider font-bold text-indigo-600 dark:text-indigo-400">
+                  The organiser
+                </p>
 
-                    <div className="w-12 h-12 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold">
+                <h2 className="mt-2 text-2xl font-black text-slate-900 dark:text-white">
+                  Organised by
+                </h2>
 
-                      {event.organiser.name
-                        ?.charAt(0)
-                        ?.toUpperCase()}
+                <div className="mt-6 flex items-center gap-4">
 
-                    </div>
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl font-black shadow-lg shadow-indigo-100 dark:shadow-indigo-950/40">
+                    {event.organiser.name
+                      ?.charAt(0)
+                      ?.toUpperCase()}
+                  </div>
 
-                    <div>
+                  <div>
 
-                      <p className="font-semibold">
-                        {event.organiser.name}
-                      </p>
+                    <p className="font-bold text-lg text-slate-900 dark:text-white">
+                      {event.organiser.name}
+                    </p>
 
-                      <p className="text-sm text-slate-500">
-                        {event.organiser.email}
-                      </p>
-
-                    </div>
+                    <p className="text-sm text-slate-500 dark:text-slate-400">
+                      {event.organiser.email}
+                    </p>
 
                   </div>
 
                 </div>
 
-              )}
-
-            </div>
+              </section>
+            )}
 
           </div>
 
-          {/* ================= BOOKING CARD ================= */}
 
-          <div>
+          {/* ================= BOOKING ================= */}
 
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-7 sticky top-6">
+          <aside>
 
-              <p className="text-sm text-slate-400">
-                Ticket price
-              </p>
+            <div className="lg:sticky lg:top-24 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-black/30 p-7 transition-colors">
 
-              <p className="text-4xl font-black text-slate-900 mt-1">
-                ₹{event.price}
-              </p>
+              {/* BOOKING HEADER */}
 
-              <div className="border-t border-slate-200 my-6" />
+              <div>
 
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <p className="text-sm font-semibold text-slate-400 dark:text-slate-500">
+                  Ticket price
+                </p>
+
+                <div className="flex items-end gap-2 mt-1">
+
+                  <span className="text-4xl font-black text-slate-900 dark:text-white">
+                    ₹{event.price}
+                  </span>
+
+                  <span className="pb-1 text-sm text-slate-400">
+                    / ticket
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div className="h-px bg-slate-200 dark:bg-slate-800 my-7" />
+
+
+              {/* AVAILABLE */}
+
+              <div className="flex items-center justify-between mb-5">
+
+                <span className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+                  Availability
+                </span>
+
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-bold ${
+                    event.availableSeats > 0
+                      ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400"
+                      : "bg-red-50 dark:bg-red-950/50 text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  {event.availableSeats > 0
+                    ? `${event.availableSeats} left`
+                    : "Sold out"}
+                </span>
+
+              </div>
+
+
+              {/* TICKET COUNT */}
+
+              <label className="block text-sm font-bold text-slate-700 dark:text-slate-200 mb-3">
                 Number of tickets
               </label>
 
-              {/* TICKET COUNTER */}
-
-              <div className="flex items-center border border-slate-300 rounded-xl overflow-hidden">
+              <div className="flex items-center h-14 border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-slate-50 dark:bg-slate-800">
 
                 <button
                   type="button"
                   onClick={() =>
                     setTickets(
-                      Math.max(
-                        1,
-                        tickets - 1
-                      )
+                      Math.max(1, tickets - 1)
                     )
                   }
-                  className="w-12 h-12 text-xl hover:bg-slate-50"
+                  className="w-14 h-full text-2xl font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 hover:text-indigo-600 transition"
                 >
                   −
                 </button>
 
-                <div className="flex-1 text-center font-bold">
+                <div className="flex-1 text-center text-lg font-black text-slate-900 dark:text-white">
                   {tickets}
                 </div>
 
@@ -417,38 +578,49 @@ export default function EventDetails() {
                       )
                     )
                   }
-                  className="w-12 h-12 text-xl hover:bg-slate-50"
+                  disabled={
+                    tickets >= event.availableSeats
+                  }
+                  className="w-14 h-full text-2xl font-medium text-slate-600 dark:text-slate-300 hover:bg-white dark:hover:bg-slate-700 hover:text-indigo-600 transition disabled:opacity-30"
                 >
                   +
                 </button>
 
               </div>
 
-              {/* PRICE */}
 
-              <div className="flex justify-between mt-6 text-slate-600">
+              {/* PRICE SUMMARY */}
 
-                <span>
-                  {tickets} × ₹{event.price}
-                </span>
+              <div className="mt-7 space-y-4">
 
-                <span className="font-semibold">
-                  ₹{totalPrice.toFixed(2)}
-                </span>
+                <div className="flex justify-between text-sm text-slate-500 dark:text-slate-400">
+
+                  <span>
+                    {tickets} × ₹{event.price}
+                  </span>
+
+                  <span>
+                    ₹{totalPrice.toFixed(2)}
+                  </span>
+
+                </div>
+
+                <div className="h-px bg-slate-200 dark:bg-slate-800" />
+
+                <div className="flex justify-between items-center">
+
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Total
+                  </span>
+
+                  <span className="text-2xl font-black text-indigo-600 dark:text-indigo-400">
+                    ₹{totalPrice.toFixed(2)}
+                  </span>
+
+                </div>
 
               </div>
 
-              <div className="flex justify-between mt-4 pt-4 border-t border-slate-200">
-
-                <span className="font-bold text-lg">
-                  Total
-                </span>
-
-                <span className="font-black text-xl">
-                  ₹{totalPrice.toFixed(2)}
-                </span>
-
-              </div>
 
               {/* BOOK BUTTON */}
 
@@ -456,7 +628,7 @@ export default function EventDetails() {
 
                 <button
                   disabled
-                  className="w-full mt-6 py-3.5 rounded-xl bg-slate-300 text-slate-500 font-bold cursor-not-allowed"
+                  className="w-full mt-7 py-4 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-500 font-bold cursor-not-allowed"
                 >
                   Sold Out
                 </button>
@@ -466,42 +638,51 @@ export default function EventDetails() {
                 <button
                   onClick={handleBooking}
                   disabled={booking}
-                  className="w-full mt-6 py-3.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition disabled:opacity-50"
+                  className="w-full mt-7 py-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg shadow-indigo-200 dark:shadow-indigo-950/40 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {booking
                     ? "Processing..."
                     : user
-                      ? "Book Tickets"
+                      ? "🎟️ Book Tickets"
                       : "Login to Book"}
                 </button>
 
               )}
 
-              {/* BOOKING MESSAGE */}
+
+              {/* MESSAGE */}
 
               {bookingMessage && (
-
-                <p
-                  className={`mt-4 text-center text-sm font-medium ${
+                <div
+                  className={`mt-4 p-3 rounded-xl text-center text-sm font-semibold ${
                     bookingMessage.includes(
                       "successfully"
                     )
-                      ? "text-green-600"
-                      : "text-red-600"
+                      ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                      : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
                   }`}
                 >
                   {bookingMessage}
-                </p>
-
+                </div>
               )}
 
-              <p className="text-xs text-slate-400 text-center mt-5">
-                Secure booking • Instant confirmation
-              </p>
+
+              {/* TRUST */}
+
+              <div className="mt-6 pt-5 border-t border-slate-100 dark:border-slate-800">
+
+                <div className="flex items-center justify-center gap-2 text-xs text-slate-400 dark:text-slate-500">
+                  <span>🔒</span>
+                  Secure booking
+                  <span>•</span>
+                  Instant confirmation
+                </div>
+
+              </div>
 
             </div>
 
-          </div>
+          </aside>
 
         </div>
 

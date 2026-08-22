@@ -6,7 +6,6 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 
 export default function OrganiserDashboard() {
-
   const navigate = useNavigate();
 
   const {
@@ -35,16 +34,10 @@ export default function OrganiserDashboard() {
   // ================= AUTHORIZATION =================
 
   useEffect(() => {
-
-    // VERY IMPORTANT:
-    // Wait until AuthContext finishes checking
-    // localStorage / /api/auth/me.
-
     if (authLoading) {
       return;
     }
 
-    // No logged-in user
     if (!user) {
       navigate("/login", {
         replace: true,
@@ -56,12 +49,10 @@ export default function OrganiserDashboard() {
     const role =
       String(user.role || "").toUpperCase();
 
-    // Only ORGANISER and ADMIN
     if (
       role !== "ORGANISER" &&
       role !== "ADMIN"
     ) {
-
       navigate("/events", {
         replace: true,
       });
@@ -69,20 +60,16 @@ export default function OrganiserDashboard() {
       return;
     }
 
-    // Authorized
     fetchEvents();
-
   }, [user, authLoading]);
 
   // ================= FETCH EVENTS =================
 
   const fetchEvents = async () => {
-
     setLoading(true);
     setError("");
 
     try {
-
       const response = await api.get(
         "/api/events"
       );
@@ -93,11 +80,8 @@ export default function OrganiserDashboard() {
         String(user?.role || "").toUpperCase();
 
       if (role === "ADMIN") {
-
         setEvents(allEvents);
-
       } else {
-
         const organiserEvents =
           allEvents.filter(
             (event) =>
@@ -106,27 +90,21 @@ export default function OrganiserDashboard() {
 
         setEvents(organiserEvents);
       }
-
     } catch (err) {
-
       console.error(err);
 
       setError(
         err.response?.data?.error ||
-        "Unable to load events."
+          "Unable to load events."
       );
-
     } finally {
-
       setLoading(false);
-
     }
   };
 
   // ================= FORM =================
 
   const handleChange = (e) => {
-
     const {
       name,
       value,
@@ -139,7 +117,6 @@ export default function OrganiserDashboard() {
   };
 
   const resetForm = () => {
-
     setForm({
       title: "",
       description: "",
@@ -156,14 +133,12 @@ export default function OrganiserDashboard() {
   // ================= CREATE =================
 
   const handleCreate = async (e) => {
-
     e.preventDefault();
 
     setError("");
     setMessage("");
 
     try {
-
       await api.post(
         "/api/events",
         {
@@ -187,14 +162,12 @@ export default function OrganiserDashboard() {
       resetForm();
 
       await fetchEvents();
-
     } catch (err) {
-
       console.error(err);
 
       setError(
         err.response?.data?.error ||
-        "Unable to create event."
+          "Unable to create event."
       );
     }
   };
@@ -202,7 +175,6 @@ export default function OrganiserDashboard() {
   // ================= EDIT =================
 
   const startEdit = (event) => {
-
     setEditingEvent(event);
 
     setForm({
@@ -229,7 +201,6 @@ export default function OrganiserDashboard() {
   // ================= UPDATE =================
 
   const handleUpdate = async (e) => {
-
     e.preventDefault();
 
     if (!editingEvent) {
@@ -240,7 +211,6 @@ export default function OrganiserDashboard() {
     setMessage("");
 
     try {
-
       await api.put(
         `/api/events/${editingEvent.id}`,
         {
@@ -264,14 +234,12 @@ export default function OrganiserDashboard() {
       resetForm();
 
       await fetchEvents();
-
     } catch (err) {
-
       console.error(err);
 
       setError(
         err.response?.data?.error ||
-        "Unable to update event."
+          "Unable to update event."
       );
     }
   };
@@ -279,7 +247,6 @@ export default function OrganiserDashboard() {
   // ================= DELETE =================
 
   const handleDelete = async (eventId) => {
-
     const confirmed =
       window.confirm(
         "Are you sure you want to delete this event?"
@@ -293,7 +260,6 @@ export default function OrganiserDashboard() {
     setMessage("");
 
     try {
-
       await api.delete(
         `/api/events/${eventId}`
       );
@@ -303,14 +269,12 @@ export default function OrganiserDashboard() {
       );
 
       await fetchEvents();
-
     } catch (err) {
-
       console.error(err);
 
       setError(
         err.response?.data?.error ||
-        "Unable to delete event."
+          "Unable to delete event."
       );
     }
   };
@@ -318,37 +282,28 @@ export default function OrganiserDashboard() {
   // ================= AUTH LOADING =================
 
   if (authLoading) {
-
     return (
-      <div className="min-h-screen bg-slate-50">
-
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
         <Navbar />
 
         <div className="flex justify-center py-32">
-
           <div className="text-center">
 
-            <div className="w-10 h-10 mx-auto border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="w-10 h-10 mx-auto border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 rounded-full animate-spin" />
 
-            <p className="mt-4 text-slate-500">
+            <p className="mt-4 text-slate-500 dark:text-slate-400">
               Checking permissions...
             </p>
 
           </div>
-
         </div>
-
       </div>
     );
   }
 
-  // ================= NO USER =================
-
   if (!user) {
     return null;
   }
-
-  // ================= ROLE CHECK =================
 
   const role =
     String(user.role || "").toUpperCase();
@@ -363,26 +318,21 @@ export default function OrganiserDashboard() {
   // ================= PAGE LOADING =================
 
   if (loading) {
-
     return (
-      <div className="min-h-screen bg-slate-50">
-
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
         <Navbar />
 
         <div className="flex justify-center py-32">
-
           <div className="text-center">
 
-            <div className="w-10 h-10 mx-auto border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="w-10 h-10 mx-auto border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 rounded-full animate-spin" />
 
-            <p className="mt-4 text-slate-500">
+            <p className="mt-4 text-slate-500 dark:text-slate-400">
               Loading dashboard...
             </p>
 
           </div>
-
         </div>
-
       </div>
     );
   }
@@ -390,9 +340,11 @@ export default function OrganiserDashboard() {
   // ================= DASHBOARD =================
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
 
       <Navbar />
+
+      {/* ================= HEADER ================= */}
 
       <section className="bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700">
 
@@ -416,31 +368,38 @@ export default function OrganiserDashboard() {
 
       </section>
 
+
       <main className="max-w-7xl mx-auto px-6 py-10">
 
+        {/* SUCCESS */}
+
         {message && (
-          <div className="mb-6 rounded-xl border border-green-200 bg-green-50 px-5 py-4 text-green-700 font-medium">
+          <div className="mb-6 rounded-xl border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/40 px-5 py-4 text-green-700 dark:text-green-400 font-medium">
             {message}
           </div>
         )}
 
+
+        {/* ERROR */}
+
         {error && (
-          <div className="mb-6 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-red-700">
+          <div className="mb-6 rounded-xl border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 px-5 py-4 text-red-700 dark:text-red-400">
             {error}
           </div>
         )}
 
+
         {/* HEADER */}
 
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-8">
 
           <div>
 
-            <h2 className="text-2xl font-bold text-slate-900">
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
               Your Events
             </h2>
 
-            <p className="text-slate-500 mt-1">
+            <p className="text-slate-500 dark:text-slate-400 mt-1">
               {events.length} event
               {events.length !== 1
                 ? "s"
@@ -451,13 +410,11 @@ export default function OrganiserDashboard() {
 
           <button
             onClick={() => {
-
               if (showForm) {
                 resetForm();
               } else {
                 setShowForm(true);
               }
-
             }}
             className="px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition"
           >
@@ -468,18 +425,16 @@ export default function OrganiserDashboard() {
 
         </div>
 
-        {/* FORM */}
+
+        {/* ================= FORM ================= */}
 
         {showForm && (
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm dark:shadow-black/20 p-7 mb-10">
 
-          <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-7 mb-10">
-
-            <h2 className="text-2xl font-bold text-slate-900 mb-6">
-
+            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
               {editingEvent
                 ? "Edit Event"
                 : "Create New Event"}
-
             </h2>
 
             <form
@@ -491,9 +446,11 @@ export default function OrganiserDashboard() {
               className="space-y-5"
             >
 
+              {/* TITLE */}
+
               <div>
 
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                   Event Title
                 </label>
 
@@ -503,14 +460,17 @@ export default function OrganiserDashboard() {
                   value={form.title}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
 
               </div>
 
+
+              {/* DESCRIPTION */}
+
               <div>
 
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                   Description
                 </label>
 
@@ -520,14 +480,17 @@ export default function OrganiserDashboard() {
                   onChange={handleChange}
                   required
                   rows="4"
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
 
               </div>
 
+
+              {/* VENUE */}
+
               <div>
 
-                <label className="block text-sm font-semibold text-slate-700 mb-2">
+                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                   Venue
                 </label>
 
@@ -537,16 +500,19 @@ export default function OrganiserDashboard() {
                   value={form.venue}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />
 
               </div>
+
+
+              {/* DATE / SEATS / PRICE */}
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
 
                 <div>
 
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                     Event Date
                   </label>
 
@@ -556,14 +522,15 @@ export default function OrganiserDashboard() {
                     value={form.eventDate}
                     onChange={handleChange}
                     required
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
 
                 </div>
 
+
                 <div>
 
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                     Total Seats
                   </label>
 
@@ -574,14 +541,15 @@ export default function OrganiserDashboard() {
                     onChange={handleChange}
                     min="1"
                     required
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
 
                 </div>
 
+
                 <div>
 
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
+                  <label className="block text-sm font-semibold text-slate-700 dark:text-slate-200 mb-2">
                     Ticket Price
                   </label>
 
@@ -593,12 +561,15 @@ export default function OrganiserDashboard() {
                     min="0"
                     step="0.01"
                     required
-                    className="w-full px-4 py-3 rounded-xl border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
 
                 </div>
 
               </div>
+
+
+              {/* BUTTONS */}
 
               <div className="flex gap-3 pt-3">
 
@@ -614,7 +585,7 @@ export default function OrganiserDashboard() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-7 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"
+                  className="px-7 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800"
                 >
                   Cancel
                 </button>
@@ -626,21 +597,22 @@ export default function OrganiserDashboard() {
           </div>
         )}
 
-        {/* EVENTS */}
+
+        {/* ================= EVENTS ================= */}
 
         {events.length === 0 ? (
 
-          <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
 
             <div className="text-5xl">
               🎟️
             </div>
 
-            <h3 className="text-2xl font-bold text-slate-900 mt-4">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mt-4">
               No events yet
             </h3>
 
-            <p className="text-slate-500 mt-2">
+            <p className="text-slate-500 dark:text-slate-400 mt-2">
               Create your first event to get started.
             </p>
 
@@ -654,7 +626,7 @@ export default function OrganiserDashboard() {
 
               <div
                 key={event.id}
-                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-black/20 overflow-hidden"
               >
 
                 <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-6">
@@ -678,27 +650,25 @@ export default function OrganiserDashboard() {
 
                 </div>
 
+
                 <div className="p-6">
 
-                  <p className="text-slate-500">
+                  <p className="text-slate-500 dark:text-slate-400">
                     {event.description}
                   </p>
 
                   <div className="mt-5 space-y-3">
 
-                    <p className="text-slate-700">
+                    <p className="text-slate-700 dark:text-slate-300">
                       📍 {event.venue}
                     </p>
 
-                    <p className="text-slate-700">
-                      💺 {event.availableSeats} /
-                      {" "}
-                      {event.totalSeats}
-                      {" "}
-                      seats available
+                    <p className="text-slate-700 dark:text-slate-300">
+                      💺 {event.availableSeats} /{" "}
+                      {event.totalSeats} seats available
                     </p>
 
-                    <p className="text-slate-700">
+                    <p className="text-slate-700 dark:text-slate-300">
                       💰 ₹
                       {Number(
                         event.price
@@ -707,7 +677,8 @@ export default function OrganiserDashboard() {
 
                   </div>
 
-                  <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-slate-200">
+
+                  <div className="flex flex-wrap gap-3 mt-6 pt-5 border-t border-slate-200 dark:border-slate-800">
 
                     <button
                       onClick={() =>
@@ -715,7 +686,7 @@ export default function OrganiserDashboard() {
                           `/events/${event.id}`
                         )
                       }
-                      className="px-4 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-slate-50"
+                      className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 font-semibold hover:bg-slate-50 dark:hover:bg-slate-800"
                     >
                       View
                     </button>
@@ -758,6 +729,7 @@ export default function OrganiserDashboard() {
             ))}
 
           </div>
+
         )}
 
       </main>

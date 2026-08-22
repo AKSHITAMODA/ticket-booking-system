@@ -4,47 +4,36 @@ import api from "../api/axios";
 import Navbar from "../components/Navbar";
 
 export default function Events() {
-
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-
     const fetchEvents = async () => {
-
       try {
-
         const response = await api.get("/api/events");
-
         setEvents(response.data);
-
       } catch (err) {
-
         console.error(err);
 
         setError(
           err.response?.data?.error ||
-          "Unable to load events"
+            "Unable to load events"
         );
-
       } finally {
-
         setLoading(false);
-
       }
     };
 
     fetchEvents();
-
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-50">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
 
       <Navbar />
 
-      {/* HERO */}
+      {/* ================= HERO ================= */}
 
       <section className="bg-gradient-to-r from-indigo-600 via-purple-600 to-violet-700 text-white">
 
@@ -76,7 +65,8 @@ export default function Events() {
 
       </section>
 
-      {/* EVENTS */}
+
+      {/* ================= EVENTS ================= */}
 
       <main className="max-w-7xl mx-auto px-6 py-14">
 
@@ -84,140 +74,179 @@ export default function Events() {
 
           <div>
 
-            <h2 className="text-3xl font-bold text-slate-900">
+            <h2 className="text-3xl font-bold text-slate-900 dark:text-white">
               Upcoming Events
             </h2>
 
-            <p className="text-slate-500 mt-2">
+            <p className="text-slate-500 dark:text-slate-400 mt-2">
               Find something you'll love.
             </p>
 
           </div>
 
+          <span className="text-sm font-semibold text-slate-400">
+            {events.length} event
+            {events.length !== 1 ? "s" : ""}
+          </span>
+
         </div>
 
-        {/* LOADING */}
+
+        {/* ================= LOADING ================= */}
 
         {loading && (
           <div className="text-center py-20">
 
-            <div className="inline-block w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+            <div className="inline-block w-10 h-10 border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 rounded-full animate-spin" />
 
-            <p className="mt-4 text-slate-500">
+            <p className="mt-4 text-slate-500 dark:text-slate-400">
               Loading events...
             </p>
 
           </div>
         )}
 
-        {/* ERROR */}
+
+        {/* ================= ERROR ================= */}
 
         {!loading && error && (
-          <div className="rounded-2xl bg-red-50 border border-red-200 p-6 text-red-700">
+          <div className="rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 p-6 text-red-700 dark:text-red-400">
             {error}
           </div>
         )}
 
-        {/* NO EVENTS */}
 
-        {!loading && !error && events.length === 0 && (
-          <div className="text-center py-20">
+        {/* ================= NO EVENTS ================= */}
 
-            <div className="text-6xl mb-5">
-              🎟️
+        {!loading &&
+          !error &&
+          events.length === 0 && (
+            <div className="text-center py-20">
+
+              <div className="text-6xl mb-5">
+                🎟️
+              </div>
+
+              <h3 className="text-2xl font-bold text-slate-900 dark:text-white">
+                No events yet
+              </h3>
+
+              <p className="text-slate-500 dark:text-slate-400 mt-2">
+                Check back soon for exciting events.
+              </p>
+
             </div>
+          )}
 
-            <h3 className="text-2xl font-bold text-slate-900">
-              No events yet
-            </h3>
 
-            <p className="text-slate-500 mt-2">
-              Check back soon for exciting events.
-            </p>
+        {/* ================= EVENT CARDS ================= */}
 
-          </div>
-        )}
+        {!loading &&
+          !error &&
+          events.length > 0 && (
 
-        {/* EVENT CARDS */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
 
-        {!loading && !error && events.length > 0 && (
+              {events.map((event) => (
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-7">
+                <div
+                  key={event.id}
+                  className="group bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm hover:shadow-2xl dark:hover:shadow-black/30 hover:-translate-y-1 transition-all duration-300"
+                >
 
-            {events.map((event) => (
+                  {/* CARD TOP */}
 
-              <div
-                key={event.id}
-                className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm hover:shadow-xl transition"
-              >
+                  <div className="h-44 bg-gradient-to-br from-indigo-500 via-purple-600 to-violet-700 p-6 flex items-end relative overflow-hidden">
 
-                {/* CARD TOP */}
+                    <div className="absolute -top-16 -right-16 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
 
-                <div className="h-40 bg-gradient-to-br from-indigo-500 to-purple-600 p-6 flex items-end">
+                    <div className="absolute -bottom-16 -left-10 w-40 h-40 rounded-full bg-white/10 blur-2xl" />
 
-                  <div>
+                    <div className="relative">
 
-                    <p className="text-indigo-100 text-sm font-medium">
-                      {new Date(event.eventDate).toLocaleDateString(
-                        "en-IN",
-                        {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric"
-                        }
-                      )}
-                    </p>
+                      <p className="text-indigo-100 text-sm font-medium">
+                        {new Date(
+                          event.eventDate
+                        ).toLocaleDateString(
+                          "en-IN",
+                          {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          }
+                        )}
+                      </p>
 
-                    <h3 className="text-2xl font-bold text-white mt-1">
-                      {event.title}
-                    </h3>
+                      <h3 className="text-2xl font-black text-white mt-1 line-clamp-2">
+                        {event.title}
+                      </h3>
+
+                    </div>
 
                   </div>
 
-                </div>
 
-                {/* CARD BODY */}
+                  {/* CARD BODY */}
 
-                <div className="p-6">
+                  <div className="p-6">
 
-                  <p className="text-slate-500 text-sm line-clamp-2 min-h-[40px]">
-                    {event.description}
-                  </p>
+                    <p className="text-slate-500 dark:text-slate-400 text-sm line-clamp-2 min-h-[40px]">
+                      {event.description ||
+                        "Join us for an unforgettable experience."}
+                    </p>
 
-                  <div className="mt-5 space-y-3">
 
-                    <div className="flex items-center gap-3 text-sm text-slate-600">
-                      <span>📍</span>
-                      <span>{event.venue}</span>
-                    </div>
+                    <div className="mt-5 space-y-3">
 
-                    <div className="flex items-center gap-3 text-sm text-slate-600">
-                      <span>🪑</span>
-                      <span>
-                        {event.availableSeats} seats available
-                      </span>
-                    </div>
+                      <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
 
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                        <span className="w-9 h-9 rounded-xl bg-indigo-50 dark:bg-indigo-950/50 flex items-center justify-center">
+                          📍
+                        </span>
 
-                      <div>
-
-                        <p className="text-xs text-slate-400">
-                          Starting from
-                        </p>
-
-                        <p className="text-xl font-bold text-slate-900">
-                          ₹{event.price}
-                        </p>
+                        <span className="truncate">
+                          {event.venue}
+                        </span>
 
                       </div>
 
-                      <Link
-                        to={`/events/${event.id}`}
-                        className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition"
-                      >
-                        View Event
-                      </Link>
+
+                      <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+
+                        <span className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/50 flex items-center justify-center">
+                          🪑
+                        </span>
+
+                        <span>
+                          {event.availableSeats} seats available
+                        </span>
+
+                      </div>
+
+
+                      <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
+
+                        <div>
+
+                          <p className="text-xs text-slate-400">
+                            Starting from
+                          </p>
+
+                          <p className="text-xl font-black text-slate-900 dark:text-white">
+                            ₹{event.price}
+                          </p>
+
+                        </div>
+
+
+                        <Link
+                          to={`/events/${event.id}`}
+                          className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 hover:-translate-y-0.5 transition-all shadow-lg shadow-indigo-200 dark:shadow-indigo-950/40"
+                        >
+                          View Event
+                        </Link>
+
+                      </div>
 
                     </div>
 
@@ -225,13 +254,11 @@ export default function Events() {
 
                 </div>
 
-              </div>
+              ))}
 
-            ))}
+            </div>
 
-          </div>
-
-        )}
+          )}
 
       </main>
 
