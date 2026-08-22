@@ -268,30 +268,44 @@ GET    /api/health
 
 
 ## ⚙️ Environment Variables
-Backend
+
+### Backend
+
+```env
 DATABASE_URL=jdbc:postgresql://<host>:<port>/<database>
 DATABASE_USERNAME=<username>
 DATABASE_PASSWORD=<password>
 
 RAZORPAY_KEY_ID=rzp_test_xxxxxxxxx
 RAZORPAY_KEY_SECRET=xxxxxxxxxxxxxxxx
+```
 
-Spring Boot configuration:
+### Spring Boot Configuration
 
+```properties
 spring.datasource.url=${DATABASE_URL:jdbc:postgresql://localhost:5432/ticket_booking}
 spring.datasource.username=${DATABASE_USERNAME:postgres}
 spring.datasource.password=${DATABASE_PASSWORD:postgres}
 
 razorpay.key.id=${RAZORPAY_KEY_ID}
 razorpay.key.secret=${RAZORPAY_KEY_SECRET}
-Frontend
+```
+
+### Frontend
+
+For production:
+
+```env
 VITE_API_URL=https://ticket-booking-systemm.onrender.com
+```
 
 For local development:
 
+```env
 VITE_API_URL=http://localhost:8080
+```
 
-⚠️ Never commit database passwords, Razorpay secrets, or other private credentials to GitHub.
+> ⚠️ **Never commit database passwords, Razorpay secrets, or other private credentials to GitHub.**
 
 ## 💻 Running Locally
 
