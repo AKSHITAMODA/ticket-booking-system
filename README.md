@@ -117,7 +117,7 @@ https://ticket-booking-systemm.onrender.com/
 
 
 ## 📁 Project Structure
-
+```text
 ticket-booking-system/
 │
 ├── backend/
@@ -146,7 +146,7 @@ ticket-booking-system/
     ├── package.json
     ├── vite.config.js
     └── index.html
-
+```
 
 ## 🔐 Authentication
 
