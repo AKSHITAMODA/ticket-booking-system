@@ -45,7 +45,8 @@ public class SecurityConfig {
                                 "/api/health",
                                 "/api/auth/register",
                                 "/api/auth/login"
-
+                                "/actuator/health",
+                                "/actuator/info",
                         ).permitAll()
 
                         // Anyone can view events
