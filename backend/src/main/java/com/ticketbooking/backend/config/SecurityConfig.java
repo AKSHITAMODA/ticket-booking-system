@@ -39,52 +39,40 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-                        // ================= PUBLIC =================
+        .requestMatchers(
+                "/api/health",
+                "/api/auth/**",
+                "/actuator/health",
+                "/actuator/info"
+        ).permitAll()
 
-                        .requestMatchers(
-                                "/api/health",
-                                "/actuator/health",
-                                "/actuator/info",
-                                "/api/auth/create-organiser",
-                                "/api/auth/register",
-                                "/api/auth/login"
-                        ).permitAll()
+        .requestMatchers(
+                HttpMethod.GET,
+                "/api/events",
+                "/api/events/**"
+        ).permitAll()
 
-                        // Anyone can view events
-                        .requestMatchers(
-                                HttpMethod.GET,
-                                "/api/events",
-                                "/api/events/**"
-                        ).permitAll()
+        .requestMatchers(
+                HttpMethod.POST,
+                "/api/events"
+        ).authenticated()
 
-                        // ================= PROTECTED =================
+        .requestMatchers(
+                HttpMethod.PUT,
+                "/api/events/**"
+        ).authenticated()
 
-                        .requestMatchers(
-                                HttpMethod.POST,
-                                "/api/events"
-                        ).authenticated()
+        .requestMatchers(
+                HttpMethod.DELETE,
+                "/api/events/**"
+        ).authenticated()
 
-                        .requestMatchers(
-                                HttpMethod.PUT,
-                                "/api/events/**"
-                        ).authenticated()
+        .requestMatchers(
+                "/api/bookings/**"
+        ).authenticated()
 
-                        .requestMatchers(
-                                HttpMethod.DELETE,
-                                "/api/events/**"
-                        ).authenticated()
-
-                        .requestMatchers(
-                                "/api/auth/me"
-                        ).authenticated()
-
-                        .requestMatchers(
-                                "/api/bookings/**"
-                        ).authenticated()
-
-                        .anyRequest().authenticated()
-                )
-
+        .anyRequest().authenticated()
+)
                 // JWT filter
                 .addFilterBefore(
                         jwtAuthenticationFilter,
