@@ -76,6 +76,11 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
+		<dependency>
+    		<groupId>org.json</groupId>
+    		<artifactId>json</artifactId>
+    		<version>20240303</version>
+		</dependency>
 
         <!-- Lombok -->
         <dependency>
@@ -108,6 +113,12 @@
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
+		<!-- Razorpay -->
+		<dependency>
+    		<groupId>com.razorpay</groupId>
+    		<artifactId>razorpay-java</artifactId>
+    		<version>1.4.10</version>
+		</dependency>
 
     </dependencies>
 

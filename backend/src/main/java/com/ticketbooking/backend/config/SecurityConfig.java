@@ -24,13 +24,10 @@ public class SecurityConfig {
             HttpSecurity http) throws Exception {
 
         http
-                // REST API
                 .csrf(csrf -> csrf.disable())
 
-                // CORS - allow frontend requests
                 .cors(cors -> {})
 
-                // JWT = stateless
                 .sessionManagement(session ->
                         session.sessionCreationPolicy(
                                 SessionCreationPolicy.STATELESS
@@ -39,41 +36,55 @@ public class SecurityConfig {
 
                 .authorizeHttpRequests(auth -> auth
 
-        .requestMatchers(
-                "/api/health",
-                "/api/auth/**",
-                "/actuator/health",
-                "/actuator/info"
-        ).permitAll()
+                        // ================= PUBLIC =================
 
-        .requestMatchers(
-                HttpMethod.GET,
-                "/api/events",
-                "/api/events/**"
-        ).permitAll()
+                        .requestMatchers(
+                                "/api/health",
+                                "/api/auth/register",
+                                "/api/auth/login"
+                        ).permitAll()
 
-        .requestMatchers(
-                HttpMethod.POST,
-                "/api/events"
-        ).authenticated()
+                        // Anyone can view events
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/events",
+                                "/api/events/**"
+                        ).permitAll()
 
-        .requestMatchers(
-                HttpMethod.PUT,
-                "/api/events/**"
-        ).authenticated()
+                        // ================= PROTECTED =================
 
-        .requestMatchers(
-                HttpMethod.DELETE,
-                "/api/events/**"
-        ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/api/events"
+                        ).authenticated()
 
-        .requestMatchers(
-                "/api/bookings/**"
-        ).authenticated()
+                        .requestMatchers(
+                                HttpMethod.PUT,
+                                "/api/events/**"
+                        ).authenticated()
 
-        .anyRequest().authenticated()
-)
-                // JWT filter
+                        .requestMatchers(
+                                HttpMethod.DELETE,
+                                "/api/events/**"
+                        ).authenticated()
+
+                        .requestMatchers(
+                                "/api/auth/me"
+                        ).authenticated()
+
+                        // Razorpay payment APIs
+                        .requestMatchers(
+                                "/api/payments/**"
+                        ).authenticated()
+
+                        // Booking APIs
+                        .requestMatchers(
+                                "/api/bookings/**"
+                        ).authenticated()
+
+                        .anyRequest().authenticated()
+                )
+
                 .addFilterBefore(
                         jwtAuthenticationFilter,
                         UsernamePasswordAuthenticationFilter.class
