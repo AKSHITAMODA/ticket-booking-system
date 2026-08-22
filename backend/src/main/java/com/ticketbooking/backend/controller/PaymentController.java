@@ -1,5 +1,6 @@
 package com.ticketbooking.backend.controller;
 
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.http.HttpStatus;
@@ -49,7 +50,7 @@ public class PaymentController {
             Map<String, Object> response =
                     paymentService.createPaymentOrder(
                             request.eventId(),
-                            request.numberOfSeats(),
+                            request.seatIds(),
                             authentication.getName()
                     );
 
@@ -140,7 +141,7 @@ public class PaymentController {
 
     public record CreateOrderRequest(
             Long eventId,
-            Integer numberOfSeats
+            List<Long> seatIds
     ) {}
 
     public record VerifyPaymentRequest(

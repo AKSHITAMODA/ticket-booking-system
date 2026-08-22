@@ -41,7 +41,8 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/health",
                                 "/api/auth/register",
-                                "/api/auth/login"
+                                "/api/auth/login",
+                                "/api/auth/create-organiser"
                         ).permitAll()
 
                         // Anyone can view events

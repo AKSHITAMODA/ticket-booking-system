@@ -20,7 +20,7 @@ public class UserService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    // ================= REGISTER =================
+    // ================= REGISTER CUSTOMER =================
 
     public User registerUser(
             String name,
@@ -28,8 +28,10 @@ public class UserService {
             String password) {
 
         if (userRepository.existsByEmail(email)) {
+
             throw new RuntimeException(
-                    "Email already registered");
+                    "Email already registered"
+            );
         }
 
         User user = new User();
@@ -37,12 +39,10 @@ public class UserService {
         user.setName(name);
         user.setEmail(email);
 
-        // Hash password before storing
         user.setPasswordHash(
                 passwordEncoder.encode(password)
         );
 
-        // Normal registration = CUSTOMER
         user.setRole(User.Role.CUSTOMER);
 
         return userRepository.save(user);
@@ -58,42 +58,50 @@ public class UserService {
                 userRepository.findByEmail(email)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Invalid email or password"));
+                                        "Invalid email or password"
+                                )
+                        );
 
         if (!passwordEncoder.matches(
                 password,
                 user.getPasswordHash())) {
 
             throw new RuntimeException(
-                    "Invalid email or password");
+                    "Invalid email or password"
+            );
         }
 
         return user;
     }
 
-    // -----------NEW ORGANISER-----------------
-    public User createOrganiser(
-        String name,
-        String email,
-        String password) {
+    // ================= CREATE ORGANISER =================
 
-    if (userRepository.existsByEmail(email)) {
-        throw new RuntimeException("Email already registered");
+    public User createOrganiser(
+            String name,
+            String email,
+            String password) {
+
+        if (userRepository.existsByEmail(email)) {
+
+            throw new RuntimeException(
+                    "Email already registered"
+            );
+        }
+
+        User user = new User();
+
+        user.setName(name);
+        user.setEmail(email);
+
+        user.setPasswordHash(
+                passwordEncoder.encode(password)
+        );
+
+        user.setRole(User.Role.ORGANISER);
+
+        return userRepository.save(user);
     }
 
-    User user = new User();
-
-    user.setName(name);
-    user.setEmail(email);
-
-    user.setPasswordHash(
-            passwordEncoder.encode(password)
-    );
-
-    user.setRole(User.Role.ORGANISER);
-
-    return userRepository.save(user);
-}
     // ================= FIND USER =================
 
     public User findByEmail(String email) {
@@ -101,7 +109,9 @@ public class UserService {
         return userRepository.findByEmail(email)
                 .orElseThrow(() ->
                         new RuntimeException(
-                                "User not found"));
+                                "User not found"
+                        )
+                );
     }
 
     // ================= JWT USER DETAILS =================

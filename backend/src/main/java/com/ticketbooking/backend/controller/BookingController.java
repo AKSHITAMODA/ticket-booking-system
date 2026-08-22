@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ticketbooking.backend.entity.Booking;
+import com.ticketbooking.backend.entity.BookingSeat;
 import com.ticketbooking.backend.service.BookingService;
 
 @RestController
@@ -29,7 +30,9 @@ public class BookingController {
         this.bookingService = bookingService;
     }
 
-    // ================= CREATE BOOKING =================
+    // =========================================================
+    // CREATE BOOKING
+    // =========================================================
 
     @PostMapping
     public ResponseEntity<?> createBooking(
@@ -51,7 +54,7 @@ public class BookingController {
             Booking booking =
                     bookingService.createBooking(
                             request.eventId(),
-                            request.numberOfSeats(),
+                            request.seatIds(),
                             authentication.getName()
                     );
 
@@ -70,7 +73,9 @@ public class BookingController {
         }
     }
 
-    // ================= MY BOOKINGS =================
+    // =========================================================
+    // MY BOOKINGS
+    // =========================================================
 
     @GetMapping("/my")
     public ResponseEntity<?> getMyBookings(
@@ -110,7 +115,9 @@ public class BookingController {
         }
     }
 
-    // ================= GET SINGLE BOOKING =================
+    // =========================================================
+    // GET SINGLE BOOKING
+    // =========================================================
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getBooking(
@@ -141,13 +148,16 @@ public class BookingController {
 
         } catch (RuntimeException e) {
 
-            if (e.getMessage().contains("permission")) {
+            String message = e.getMessage();
+
+            if (message != null &&
+                    message.contains("permission")) {
 
                 return ResponseEntity
                         .status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
                                 "error",
-                                e.getMessage()
+                                message
                         ));
             }
 
@@ -155,12 +165,14 @@ public class BookingController {
                     .status(HttpStatus.NOT_FOUND)
                     .body(Map.of(
                             "error",
-                            e.getMessage()
+                            message
                     ));
         }
     }
 
-    // ================= CANCEL =================
+    // =========================================================
+    // CANCEL BOOKING
+    // =========================================================
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> cancelBooking(
@@ -196,13 +208,16 @@ public class BookingController {
 
         } catch (RuntimeException e) {
 
-            if (e.getMessage().contains("permission")) {
+            String message = e.getMessage();
+
+            if (message != null &&
+                    message.contains("permission")) {
 
                 return ResponseEntity
                         .status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
                                 "error",
-                                e.getMessage()
+                                message
                         ));
             }
 
@@ -210,12 +225,14 @@ public class BookingController {
                     .status(HttpStatus.BAD_REQUEST)
                     .body(Map.of(
                             "error",
-                            e.getMessage()
+                            message
                     ));
         }
     }
 
-    // ================= EVENT BOOKINGS =================
+    // =========================================================
+    // EVENT BOOKINGS
+    // =========================================================
 
     @GetMapping("/event/{eventId}")
     public ResponseEntity<?> getEventBookings(
@@ -248,13 +265,16 @@ public class BookingController {
 
         } catch (RuntimeException e) {
 
-            if (e.getMessage().contains("permission")) {
+            String message = e.getMessage();
+
+            if (message != null &&
+                    message.contains("permission")) {
 
                 return ResponseEntity
                         .status(HttpStatus.FORBIDDEN)
                         .body(Map.of(
                                 "error",
-                                e.getMessage()
+                                message
                         ));
             }
 
@@ -262,34 +282,55 @@ public class BookingController {
                     .status(HttpStatus.NOT_FOUND)
                     .body(Map.of(
                             "error",
-                            e.getMessage()
+                            message
                     ));
         }
     }
 
-    // ================= RESPONSE =================
+    // =========================================================
+    // RESPONSE
+    // =========================================================
 
     private Map<String, Object> toResponse(
             Booking booking) {
 
-        return Map.of(
-                "id", booking.getId(),
+        List<Map<String, Object>> seats =
+                booking.getBookingSeats()
+                        .stream()
+                        .map(this::seatToResponse)
+                        .toList();
 
-                "event", Map.of(
-                        "id", booking.getEvent().getId(),
-                        "title", booking.getEvent().getTitle(),
-                        "venue", booking.getEvent().getVenue(),
-                        "eventDate", booking.getEvent().getEventDate()
+        return Map.of(
+                "id",
+                booking.getId(),
+
+                "event",
+                Map.of(
+                        "id",
+                        booking.getEvent().getId(),
+                        "title",
+                        booking.getEvent().getTitle(),
+                        "venue",
+                        booking.getEvent().getVenue(),
+                        "eventDate",
+                        booking.getEvent().getEventDate()
                 ),
 
-                "user", Map.of(
-                        "id", booking.getUser().getId(),
-                        "name", booking.getUser().getName(),
-                        "email", booking.getUser().getEmail()
+                "user",
+                Map.of(
+                        "id",
+                        booking.getUser().getId(),
+                        "name",
+                        booking.getUser().getName(),
+                        "email",
+                        booking.getUser().getEmail()
                 ),
 
                 "numberOfSeats",
                 booking.getNumberOfSeats(),
+
+                "seats",
+                seats,
 
                 "totalAmount",
                 booking.getTotalAmount(),
@@ -302,10 +343,31 @@ public class BookingController {
         );
     }
 
-    // ================= REQUEST =================
+    // =========================================================
+    // SEAT RESPONSE
+    // =========================================================
+
+    private Map<String, Object> seatToResponse(
+            BookingSeat bookingSeat) {
+
+        return Map.of(
+                "id",
+                bookingSeat.getSeat().getId(),
+
+                "seatNumber",
+                bookingSeat.getSeat().getSeatNumber(),
+
+                "status",
+                bookingSeat.getSeat().getStatus().name()
+        );
+    }
+
+    // =========================================================
+    // REQUEST
+    // =========================================================
 
     public record BookingRequest(
             Long eventId,
-            Integer numberOfSeats
+            List<Long> seatIds
     ) {}
 }

@@ -12,13 +12,20 @@ import com.ticketbooking.backend.entity.User;
 
 import jakarta.persistence.LockModeType;
 
-public interface EventRepository extends JpaRepository<Event, Long> {
+public interface EventRepository
+        extends JpaRepository<Event, Long> {
 
     List<Event> findAllByOrderByEventDateAsc();
 
-    List<Event> findByOrganiserOrderByEventDateAsc(User organiser);
+    List<Event> findByOrganiserOrderByEventDateAsc(
+            User organiser
+    );
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT e FROM Event e WHERE e.id = :id")
+    @Query("""
+            SELECT e
+            FROM Event e
+            WHERE e.id = :id
+            """)
     Optional<Event> findByIdForUpdate(Long id);
 }

@@ -2,8 +2,10 @@ package com.ticketbooking.backend.service;
 
 import java.math.BigDecimal;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
@@ -16,9 +18,11 @@ import com.ticketbooking.backend.config.RazorpayConfig;
 import com.ticketbooking.backend.entity.Booking;
 import com.ticketbooking.backend.entity.Event;
 import com.ticketbooking.backend.entity.PaymentOrder;
+import com.ticketbooking.backend.entity.Seat;
 import com.ticketbooking.backend.entity.User;
 import com.ticketbooking.backend.repository.EventRepository;
 import com.ticketbooking.backend.repository.PaymentOrderRepository;
+import com.ticketbooking.backend.repository.SeatRepository;
 
 @Service
 public class PaymentService {
@@ -27,6 +31,7 @@ public class PaymentService {
     private final RazorpayConfig razorpayConfig;
     private final PaymentOrderRepository paymentOrderRepository;
     private final EventRepository eventRepository;
+    private final SeatRepository seatRepository;
     private final UserService userService;
     private final BookingService bookingService;
 
@@ -35,13 +40,16 @@ public class PaymentService {
             RazorpayConfig razorpayConfig,
             PaymentOrderRepository paymentOrderRepository,
             EventRepository eventRepository,
+            SeatRepository seatRepository,
             UserService userService,
             BookingService bookingService) {
 
         this.razorpayClient = razorpayClient;
         this.razorpayConfig = razorpayConfig;
-        this.paymentOrderRepository = paymentOrderRepository;
+        this.paymentOrderRepository =
+                paymentOrderRepository;
         this.eventRepository = eventRepository;
+        this.seatRepository = seatRepository;
         this.userService = userService;
         this.bookingService = bookingService;
     }
@@ -53,40 +61,116 @@ public class PaymentService {
     @Transactional
     public Map<String, Object> createPaymentOrder(
             Long eventId,
-            Integer numberOfSeats,
+            List<Long> seatIds,
             String userEmail) {
 
-        if (numberOfSeats == null || numberOfSeats <= 0) {
+        // -----------------------------------------------------
+        // Validate seat selection
+        // -----------------------------------------------------
+
+        if (seatIds == null || seatIds.isEmpty()) {
+
             throw new RuntimeException(
-                    "Number of seats must be greater than 0");
+                    "At least one seat must be selected"
+            );
+        }
+
+        if (seatIds.size() !=
+                seatIds.stream().distinct().count()) {
+
+            throw new RuntimeException(
+                    "Duplicate seats are not allowed"
+            );
         }
 
         User user =
                 userService.findByEmail(userEmail);
 
+        // -----------------------------------------------------
+        // Lock event
+        // -----------------------------------------------------
+
         Event event =
                 eventRepository.findByIdForUpdate(eventId)
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Event not found"));
+                                        "Event not found"
+                                ));
 
-        if (event.getAvailableSeats() < numberOfSeats) {
+        // -----------------------------------------------------
+        // Validate availability
+        // -----------------------------------------------------
+
+        if (event.getAvailableSeats()
+                < seatIds.size()) {
+
             throw new RuntimeException(
-                    "Not enough seats available");
+                    "Not enough seats available"
+            );
         }
+
+        // -----------------------------------------------------
+        // Validate every selected seat
+        // -----------------------------------------------------
+
+        for (Long seatId : seatIds) {
+
+            Seat seat =
+                    seatRepository.findByIdForUpdate(
+                            seatId
+                    )
+                    .orElseThrow(() ->
+                            new RuntimeException(
+                                    "Seat not found: "
+                                            + seatId
+                            ));
+
+            if (!seat.getEvent().getId()
+                    .equals(event.getId())) {
+
+                throw new RuntimeException(
+                        "Selected seat does not belong to this event"
+                );
+            }
+
+            if (seat.getStatus()
+                    != Seat.Status.AVAILABLE) {
+
+                throw new RuntimeException(
+                        "Seat "
+                                + seat.getSeatNumber()
+                                + " is already booked"
+                );
+            }
+        }
+
+        // -----------------------------------------------------
+        // Calculate amount
+        // -----------------------------------------------------
+
+        int numberOfSeats =
+                seatIds.size();
 
         BigDecimal amount =
                 event.getPrice()
                         .multiply(
-                                BigDecimal.valueOf(numberOfSeats)
+                                BigDecimal.valueOf(
+                                        numberOfSeats
+                                )
                         );
 
         long amountInPaise =
                 amount
-                        .multiply(BigDecimal.valueOf(100))
+                        .multiply(
+                                BigDecimal.valueOf(100)
+                        )
                         .longValueExact();
 
         try {
+
+            // -------------------------------------------------
+            // Razorpay receipt
+            // -------------------------------------------------
 
             String receipt =
                     "ticket_" +
@@ -113,6 +197,10 @@ public class PaymentService {
                     receipt
             );
 
+            // -------------------------------------------------
+            // Razorpay notes
+            // -------------------------------------------------
+
             JSONObject notes =
                     new JSONObject();
 
@@ -127,8 +215,8 @@ public class PaymentService {
             );
 
             notes.put(
-                    "seats",
-                    numberOfSeats
+                    "seat_ids",
+                    seatIds.toString()
             );
 
             orderRequest.put(
@@ -136,12 +224,20 @@ public class PaymentService {
                     notes
             );
 
+            // -------------------------------------------------
+            // Create Razorpay order
+            // -------------------------------------------------
+
             Order razorpayOrder =
                     razorpayClient.orders
                             .create(orderRequest);
 
             String razorpayOrderId =
                     razorpayOrder.get("id");
+
+            // -------------------------------------------------
+            // Save payment order
+            // -------------------------------------------------
 
             PaymentOrder paymentOrder =
                     new PaymentOrder();
@@ -151,9 +247,26 @@ public class PaymentService {
             );
 
             paymentOrder.setUser(user);
+
             paymentOrder.setEvent(event);
+
             paymentOrder.setNumberOfSeats(
                     numberOfSeats
+            );
+
+            /*
+             * Store:
+             *
+             * [1,2,3]
+             */
+            paymentOrder.setSeatIds(
+                    seatIds.stream()
+                            .map(String::valueOf)
+                            .collect(
+                                    Collectors.joining(
+                                            ","
+                                    )
+                            )
             );
 
             paymentOrder.setAmount(amount);
@@ -165,6 +278,10 @@ public class PaymentService {
             paymentOrderRepository.save(
                     paymentOrder
             );
+
+            // -------------------------------------------------
+            // Response
+            // -------------------------------------------------
 
             Map<String, Object> response =
                     new HashMap<>();
@@ -204,6 +321,11 @@ public class PaymentService {
                     numberOfSeats
             );
 
+            response.put(
+                    "seatIds",
+                    seatIds
+            );
+
             return response;
 
         } catch (Exception e) {
@@ -237,23 +359,31 @@ public class PaymentService {
                         )
                         .orElseThrow(() ->
                                 new RuntimeException(
-                                        "Payment order not found"));
+                                        "Payment order not found"
+                                ));
 
-        // Idempotency:
-        // If frontend sends verification twice,
-        // don't create another booking.
+        // -----------------------------------------------------
+        // Idempotency
+        // -----------------------------------------------------
+
         if (paymentOrder.getStatus()
                 == PaymentOrder.Status.PAID) {
 
             if (paymentOrder.getBooking() != null) {
+
                 return paymentOrder.getBooking();
             }
 
             throw new RuntimeException(
-                    "Payment was already processed");
+                    "Payment was already processed"
+            );
         }
 
         try {
+
+            // -------------------------------------------------
+            // Verify Razorpay signature
+            // -------------------------------------------------
 
             JSONObject attributes =
                     new JSONObject();
@@ -294,19 +424,39 @@ public class PaymentService {
                 );
             }
 
-            /*
-             * Signature is valid.
-             *
-             * Now create the actual booking.
-             * BookingService will lock the event row
-             * and check availability again.
-             */
+            // -------------------------------------------------
+            // Convert stored seat IDs back to List<Long>
+            // -------------------------------------------------
+
+            List<Long> seatIds =
+                    java.util.Arrays
+                            .stream(
+                                    paymentOrder
+                                            .getSeatIds()
+                                            .split(",")
+                            )
+                            .map(String::trim)
+                            .map(Long::valueOf)
+                            .toList();
+
+            // -------------------------------------------------
+            // Create actual booking
+            // -------------------------------------------------
+
             Booking booking =
                     bookingService.createBooking(
-                            paymentOrder.getEvent().getId(),
-                            paymentOrder.getNumberOfSeats(),
+                            paymentOrder
+                                    .getEvent()
+                                    .getId(),
+
+                            seatIds,
+
                             userEmail
                     );
+
+            // -------------------------------------------------
+            // Update payment order
+            // -------------------------------------------------
 
             paymentOrder.setRazorpayPaymentId(
                     razorpayPaymentId
@@ -316,7 +466,9 @@ public class PaymentService {
                     PaymentOrder.Status.PAID
             );
 
-            paymentOrder.setBooking(booking);
+            paymentOrder.setBooking(
+                    booking
+            );
 
             paymentOrderRepository.save(
                     paymentOrder

@@ -37,7 +37,7 @@ public class EventController {
         this.userService = userService;
     }
 
-    // ================= GET ALL =================
+    // ================= GET ALL EVENTS =================
 
     @GetMapping
     public ResponseEntity<?> getAllEvents() {
@@ -52,7 +52,7 @@ public class EventController {
         );
     }
 
-    // ================= GET BY ID =================
+    // ================= GET EVENT =================
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getEvent(
@@ -78,7 +78,7 @@ public class EventController {
         }
     }
 
-    // ================= CREATE =================
+    // ================= CREATE EVENT =================
 
     @PostMapping
     public ResponseEntity<?> createEvent(
@@ -139,7 +139,7 @@ public class EventController {
         }
     }
 
-    // ================= UPDATE =================
+    // ================= UPDATE EVENT =================
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateEvent(
@@ -209,7 +209,7 @@ public class EventController {
         }
     }
 
-    // ================= DELETE =================
+    // ================= DELETE EVENT =================
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteEvent(
@@ -276,21 +276,44 @@ public class EventController {
 
     // ================= RESPONSE =================
 
-    private Map<String, Object> toResponse(Event event) {
+    private Map<String, Object> toResponse(
+            Event event) {
 
         return Map.of(
-                "id", event.getId(),
-                "title", event.getTitle(),
-                "description", event.getDescription(),
-                "venue", event.getVenue(),
-                "eventDate", event.getEventDate(),
-                "totalSeats", event.getTotalSeats(),
-                "availableSeats", event.getAvailableSeats(),
-                "price", event.getPrice(),
-                "organiser", Map.of(
-                        "id", event.getOrganiser().getId(),
-                        "name", event.getOrganiser().getName(),
-                        "email", event.getOrganiser().getEmail()
+                "id",
+                event.getId(),
+
+                "title",
+                event.getTitle(),
+
+                "description",
+                event.getDescription(),
+
+                "venue",
+                event.getVenue(),
+
+                "eventDate",
+                event.getEventDate(),
+
+                "totalSeats",
+                event.getTotalSeats(),
+
+                "availableSeats",
+                event.getAvailableSeats(),
+
+                "price",
+                event.getPrice(),
+
+                "organiser",
+                Map.of(
+                        "id",
+                        event.getOrganiser().getId(),
+
+                        "name",
+                        event.getOrganiser().getName(),
+
+                        "email",
+                        event.getOrganiser().getEmail()
                 )
         );
     }
