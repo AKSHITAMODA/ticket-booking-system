@@ -71,6 +71,29 @@ public class UserService {
         return user;
     }
 
+    // -----------NEW ORGANISER-----------------
+    public User createOrganiser(
+        String name,
+        String email,
+        String password) {
+
+    if (userRepository.existsByEmail(email)) {
+        throw new RuntimeException("Email already registered");
+    }
+
+    User user = new User();
+
+    user.setName(name);
+    user.setEmail(email);
+
+    user.setPasswordHash(
+            passwordEncoder.encode(password)
+    );
+
+    user.setRole(User.Role.ORGANISER);
+
+    return userRepository.save(user);
+}
     // ================= FIND USER =================
 
     public User findByEmail(String email) {
