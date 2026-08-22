@@ -223,29 +223,48 @@ When a booking is cancelled:
 availableSeats = availableSeats + numberOfSeats
 
 The backend uses pessimistic database locking while modifying event availability to prevent concurrent bookings from overselling seats.
+## 🔌 API Endpoints
 
-##🔌 API Endpoints
-Authentication
-POST /api/auth/register
-POST /api/auth/login
-GET  /api/auth/me
-Events
+### Authentication
+
+```text
+POST   /api/auth/register
+POST   /api/auth/login
+GET    /api/auth/me
+```
+
+### Events
+
+```text
 GET    /api/events
 GET    /api/events/{id}
 POST   /api/events
 PUT    /api/events/{id}
 DELETE /api/events/{id}
-Bookings
+```
+
+### Bookings
+
+```text
 POST   /api/bookings
 GET    /api/bookings/my
 GET    /api/bookings/{id}
 DELETE /api/bookings/{id}
 GET    /api/bookings/event/{eventId}
-Payments
-POST /api/payments/create-order
-POST /api/payments/verify
-Health
-GET /api/health
+```
+
+### Payments
+
+```text
+POST   /api/payments/create-order
+POST   /api/payments/verify
+```
+
+### Health
+
+```text
+GET    /api/health
+```
 
 
 ## ⚙️ Environment Variables
