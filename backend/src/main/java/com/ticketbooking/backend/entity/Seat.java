@@ -1,7 +1,5 @@
 package com.ticketbooking.backend.entity;
 
-import java.time.LocalDateTime;
-
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,102 +24,36 @@ import jakarta.persistence.UniqueConstraint;
 )
 public class Seat {
 
-    // =========================================================
-    // STATUS
-    // =========================================================
-
     public enum Status {
         AVAILABLE,
-        HELD,
         BOOKED
     }
-
-    // =========================================================
-    // CATEGORY
-    // =========================================================
 
     public enum Category {
         PREMIUM,
         STANDARD
     }
 
-    // =========================================================
-    // ID
-    // =========================================================
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // =========================================================
-    // SEAT NUMBER
-    // =========================================================
-
-    @Column(
-        name = "seat_number",
-        nullable = false
-    )
+    @Column(name = "seat_number", nullable = false)
     private String seatNumber;
 
-    // =========================================================
-    // CATEGORY
-    // =========================================================
-
     @Enumerated(EnumType.STRING)
-    @Column(
-        nullable = false,
-        length = 20
-    )
+    @Column(nullable = false, length = 20)
     private Category category;
 
-    // =========================================================
-    // STATUS
-    // =========================================================
-
     @Enumerated(EnumType.STRING)
-    @Column(
-        nullable = false,
-        length = 20
-    )
+    @Column(nullable = false, length = 20)
     private Status status;
 
-    // =========================================================
-    // EVENT
-    // =========================================================
-
-    @ManyToOne(
-        fetch = FetchType.LAZY,
-        optional = false
-    )
-    @JoinColumn(
-        name = "event_id",
-        nullable = false
-    )
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    // =========================================================
-    // HOLD INFORMATION
-    // =========================================================
-
-    /*
-     * ID of the user currently holding this seat.
-     *
-     * NULL when the seat is AVAILABLE or BOOKED.
-     */
-    @Column(name = "held_by_user_id")
-    private Long heldByUserId;
-
-    /*
-     * Time at which the temporary hold expires.
-     *
-     * NULL when the seat is AVAILABLE or BOOKED.
-     */
-    @Column(name = "hold_expires_at")
-    private LocalDateTime holdExpiresAt;
-
-    // =========================================================
-    // GETTERS
-    // =========================================================
+    // ================= GETTERS =================
 
     public Long getId() {
         return id;
@@ -143,17 +75,7 @@ public class Seat {
         return event;
     }
 
-    public Long getHeldByUserId() {
-        return heldByUserId;
-    }
-
-    public LocalDateTime getHoldExpiresAt() {
-        return holdExpiresAt;
-    }
-
-    // =========================================================
-    // SETTERS
-    // =========================================================
+    // ================= SETTERS =================
 
     public void setSeatNumber(String seatNumber) {
         this.seatNumber = seatNumber;
@@ -169,13 +91,5 @@ public class Seat {
 
     public void setEvent(Event event) {
         this.event = event;
-    }
-
-    public void setHeldByUserId(Long heldByUserId) {
-        this.heldByUserId = heldByUserId;
-    }
-
-    public void setHoldExpiresAt(LocalDateTime holdExpiresAt) {
-        this.holdExpiresAt = holdExpiresAt;
     }
 }
