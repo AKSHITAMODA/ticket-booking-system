@@ -17,6 +17,7 @@ import com.ticketbooking.backend.entity.WaitlistEntry;
 import com.ticketbooking.backend.repository.EventRepository;
 import com.ticketbooking.backend.repository.SeatRepository;
 import com.ticketbooking.backend.repository.WaitlistRepository;
+
 @Service
 public class WaitlistService {
 
@@ -74,9 +75,15 @@ public class WaitlistService {
                                 ));
 
         /*
-         * A user cannot have multiple active
-         * waitlist entries for the same event
-         * and category.
+         * IMPORTANT:
+         *
+         * Because the database has a UNIQUE constraint on
+         *
+         * (event_id, user_id, category)
+         *
+         * we MUST reuse an old entry instead of inserting
+         * another row when the customer previously left the
+         * waitlist.
          */
         var existing =
                 waitlistRepository
@@ -91,23 +98,70 @@ public class WaitlistService {
             WaitlistEntry entry =
                     existing.get();
 
+            /*
+             * Already actively waiting.
+             */
             if (entry.getStatus() ==
-                    WaitlistEntry.Status.WAITING ||
-                entry.getStatus() ==
-                    WaitlistEntry.Status.OFFERED) {
+                    WaitlistEntry.Status.WAITING) {
 
                 throw new RuntimeException(
                         "You are already on the waitlist for this category"
                 );
             }
+
+            /*
+             * Already have an offered seat.
+             */
+            if (entry.getStatus() ==
+                    WaitlistEntry.Status.OFFERED) {
+
+                throw new RuntimeException(
+                        "You already have an active seat offer"
+                );
+            }
+
+            /*
+             * FULFILLED entries cannot be rejoined using
+             * the same record because the ticket was already
+             * successfully booked.
+             */
+            if (entry.getStatus() ==
+                    WaitlistEntry.Status.FULFILLED) {
+
+                throw new RuntimeException(
+                        "This waitlist entry has already been fulfilled"
+                );
+            }
+
+            /*
+             * CANCELLED / EXPIRED entries can be reused.
+             *
+             * This avoids violating the unique database
+             * constraint.
+             */
+            int nextPosition =
+                    getNextActivePosition(
+                            event,
+                            category
+                    );
+
+            entry.setPosition(nextPosition);
+
+            entry.setStatus(
+                    WaitlistEntry.Status.WAITING
+            );
+
+            entry.setOfferedSeat(null);
+
+            entry.setOfferExpiresAt(null);
+
+            return waitlistRepository.save(entry);
         }
 
         /*
-         * Determine the next ACTIVE position.
+         * No previous entry exists.
          *
-         * We deliberately do not use MAX(position)
-         * because cancelled/expired entries should
-         * not permanently consume queue positions.
+         * Create the first record.
          */
         int nextPosition =
                 getNextActivePosition(
@@ -230,10 +284,6 @@ public class WaitlistService {
             );
         }
 
-        /*
-         * Remember whether this customer currently
-         * owns an offered seat.
-         */
         Seat offeredSeat =
                 entry.getOfferedSeat();
 
@@ -257,7 +307,7 @@ public class WaitlistService {
 
         /*
          * If this customer had an OFFERED seat,
-         * release that seat.
+         * release it.
          */
         if (offeredSeat != null &&
                 offeredSeat.getStatus() ==
@@ -280,19 +330,7 @@ public class WaitlistService {
             seatRepository.save(offeredSeat);
 
             /*
-             * Re-number the remaining waiting
-             * customers.
-             *
-             * Example:
-             *
-             * Before:
-             * #1 CANCELLED
-             * #2 WAITING
-             * #3 WAITING
-             *
-             * After:
-             * #1 WAITING
-             * #2 WAITING
+             * Re-number remaining waiting customers.
              */
             compactWaitingPositions(
                     event,
@@ -300,8 +338,7 @@ public class WaitlistService {
             );
 
             /*
-             * Give the released seat to the new
-             * position #1 customer.
+             * Give released seat to next customer.
              */
             offerNextCustomer(
                     event,
@@ -312,17 +349,6 @@ public class WaitlistService {
 
             /*
              * Normal WAITING cancellation.
-             *
-             * Example:
-             *
-             * #1 WAITING
-             * #2 CANCELLED
-             * #3 WAITING
-             *
-             * becomes:
-             *
-             * #1 WAITING
-             * #2 WAITING
              */
             compactWaitingPositions(
                     event,
@@ -356,38 +382,23 @@ public class WaitlistService {
         }
 
         /*
-         * Only customers waiting for the
-         * same seat category are eligible.
+         * Only customers waiting for the same
+         * category are eligible.
          */
         WaitlistEntry.Category category =
                 WaitlistEntry.Category.valueOf(
                         seat.getCategory().name()
                 );
 
-        List<WaitlistEntry> waitingEntries =
-                waitlistRepository
-                        .findWaitingEntriesForUpdate(
-                                event,
-                                category
-                        );
-
-        if (waitingEntries.isEmpty()) {
-            return null;
-        }
-
         /*
-         * Make sure positions are compact
-         * before selecting the first customer.
+         * Compact first.
          */
         compactWaitingPositions(
                 event,
                 category
         );
 
-        /*
-         * Fetch again after compaction.
-         */
-        waitingEntries =
+        List<WaitlistEntry> waitingEntries =
                 waitlistRepository
                         .findWaitingEntriesForUpdate(
                                 event,
@@ -413,10 +424,9 @@ public class WaitlistService {
                 );
 
         /*
-         * Temporarily reserve the seat.
+         * Temporarily reserve seat.
          *
-         * Payment has not happened yet,
-         * therefore status = HELD.
+         * Payment has NOT happened yet.
          */
         seat.setStatus(
                 Seat.Status.HELD
@@ -495,8 +505,8 @@ public class WaitlistService {
             waitlistRepository.save(entry);
 
             /*
-             * Release the seat only if it is still
-             * held by this waitlist customer.
+             * Release seat if still held by
+             * this waitlist customer.
              */
             if (offeredSeat != null &&
                     offeredSeat.getStatus() ==
@@ -504,8 +514,8 @@ public class WaitlistService {
                     entry.getUser()
                             .getId()
                             .equals(
-                                offeredSeat
-                                    .getHeldByUserId()
+                                    offeredSeat
+                                            .getHeldByUserId()
                             )) {
 
                 offeredSeat.setStatus(
@@ -521,8 +531,7 @@ public class WaitlistService {
                 );
 
                 /*
-                 * Remove the expired customer from
-                 * the active queue positions.
+                 * Re-number waiting customers.
                  */
                 compactWaitingPositions(
                         event,
@@ -530,8 +539,8 @@ public class WaitlistService {
                 );
 
                 /*
-                 * Immediately offer the released
-                 * seat to the next customer.
+                 * Immediately offer released seat
+                 * to next customer.
                  */
                 offerNextCustomer(
                         event,
@@ -540,7 +549,8 @@ public class WaitlistService {
             }
         }
     }
-        // =========================================================
+
+    // =========================================================
     // ACCEPT OFFER
     // =========================================================
 
@@ -550,7 +560,10 @@ public class WaitlistService {
             String userEmail) {
 
         WaitlistEntry entry =
-                getEntry(entryId, userEmail);
+                getEntry(
+                        entryId,
+                        userEmail
+                );
 
         if (entry.getStatus() !=
                 WaitlistEntry.Status.OFFERED) {
@@ -571,7 +584,8 @@ public class WaitlistService {
                 LocalDateTime.now();
 
         if (entry.getOfferExpiresAt() == null ||
-                !entry.getOfferExpiresAt().isAfter(now)) {
+                !entry.getOfferExpiresAt()
+                        .isAfter(now)) {
 
             throw new RuntimeException(
                     "This seat offer has expired"
@@ -591,7 +605,9 @@ public class WaitlistService {
 
         if (seat.getHeldByUserId() == null ||
                 !seat.getHeldByUserId()
-                        .equals(entry.getUser().getId())) {
+                        .equals(
+                                entry.getUser().getId()
+                        )) {
 
             throw new RuntimeException(
                     "The offered seat is held by another user"
@@ -599,11 +615,13 @@ public class WaitlistService {
         }
 
         /*
-        * Do NOT change the seat to BOOKED here.
-        *
-        * It stays HELD until Razorpay payment
-        * is successfully verified.
-        */
+         * IMPORTANT:
+         *
+         * Do NOT change the seat to BOOKED here.
+         *
+         * It remains HELD until Razorpay payment
+         * is successfully verified.
+         */
 
         Map<String, Object> response =
                 new java.util.HashMap<>();
@@ -687,7 +705,7 @@ public class WaitlistService {
                 seat.getEvent();
 
         /*
-         * Make sure the seat is actually available.
+         * Make sure seat is available.
          */
         if (seat.getStatus() !=
                 Seat.Status.AVAILABLE) {
@@ -746,10 +764,6 @@ public class WaitlistService {
                                 WaitlistEntry.Status.WAITING
                         );
 
-        /*
-         * If there is currently an OFFERED customer,
-         * that customer occupies the next queue slot.
-         */
         List<WaitlistEntry> offeredEntries =
                 waitlistRepository
                         .findByEventAndCategoryAndStatusOrderByPositionAsc(
