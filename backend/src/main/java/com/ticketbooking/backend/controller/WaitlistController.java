@@ -174,6 +174,51 @@ public class WaitlistController {
     }
 
     // =========================================================
+    // ACCEPT OFFERED SEAT
+    // =========================================================
+
+    @PostMapping("/{entryId}/accept")
+    public ResponseEntity<?> acceptOffer(
+            @PathVariable Long entryId,
+            Authentication authentication) {
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "error",
+                            "Authentication required"
+                    ));
+        }
+
+        try {
+
+            Map<String, Object> response =
+                    waitlistService.acceptOffer(
+                            entryId,
+                            authentication.getName()
+                    );
+
+            return ResponseEntity.ok(response);
+
+        } catch (RuntimeException e) {
+
+            String message = e.getMessage();
+
+            return ResponseEntity
+                    .status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of(
+                            "error",
+                            message == null
+                                    ? "Unable to accept offer"
+                                    : message
+                    ));
+        }
+    }
+
+    // =========================================================
     // CANCEL WAITLIST ENTRY
     // =========================================================
 
@@ -205,7 +250,6 @@ public class WaitlistController {
                     Map.of(
                             "message",
                             "Waitlist entry cancelled successfully",
-
                             "waitlist",
                             toResponse(entry)
                     )

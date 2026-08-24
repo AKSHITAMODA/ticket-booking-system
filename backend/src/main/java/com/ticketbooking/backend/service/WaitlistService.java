@@ -3,6 +3,7 @@ package com.ticketbooking.backend.service;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -16,7 +17,6 @@ import com.ticketbooking.backend.entity.WaitlistEntry;
 import com.ticketbooking.backend.repository.EventRepository;
 import com.ticketbooking.backend.repository.SeatRepository;
 import com.ticketbooking.backend.repository.WaitlistRepository;
-
 @Service
 public class WaitlistService {
 
@@ -539,6 +539,111 @@ public class WaitlistService {
                 );
             }
         }
+    }
+        // =========================================================
+    // ACCEPT OFFER
+    // =========================================================
+
+    @Transactional
+    public Map<String, Object> acceptOffer(
+            Long entryId,
+            String userEmail) {
+
+        WaitlistEntry entry =
+                getEntry(entryId, userEmail);
+
+        if (entry.getStatus() !=
+                WaitlistEntry.Status.OFFERED) {
+
+            throw new RuntimeException(
+                    "This waitlist entry does not have an active seat offer"
+            );
+        }
+
+        if (entry.getOfferedSeat() == null) {
+
+            throw new RuntimeException(
+                    "No seat has been offered"
+            );
+        }
+
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        if (entry.getOfferExpiresAt() == null ||
+                !entry.getOfferExpiresAt().isAfter(now)) {
+
+            throw new RuntimeException(
+                    "This seat offer has expired"
+            );
+        }
+
+        Seat seat =
+                entry.getOfferedSeat();
+
+        if (seat.getStatus() !=
+                Seat.Status.HELD) {
+
+            throw new RuntimeException(
+                    "The offered seat is no longer available"
+            );
+        }
+
+        if (seat.getHeldByUserId() == null ||
+                !seat.getHeldByUserId()
+                        .equals(entry.getUser().getId())) {
+
+            throw new RuntimeException(
+                    "The offered seat is held by another user"
+            );
+        }
+
+        /*
+        * Do NOT change the seat to BOOKED here.
+        *
+        * It stays HELD until Razorpay payment
+        * is successfully verified.
+        */
+
+        Map<String, Object> response =
+                new java.util.HashMap<>();
+
+        response.put(
+                "entryId",
+                entry.getId()
+        );
+
+        response.put(
+                "eventId",
+                entry.getEvent().getId()
+        );
+
+        response.put(
+                "seatId",
+                seat.getId()
+        );
+
+        response.put(
+                "seatNumber",
+                seat.getSeatNumber()
+        );
+
+        response.put(
+                "amount",
+                entry.getEvent().getPrice()
+        );
+
+        response.put(
+                "status",
+                entry.getStatus().name()
+        );
+
+        response.put(
+                "message",
+                "Offer accepted. Proceed to payment."
+        );
+
+        return response;
     }
 
     // =========================================================

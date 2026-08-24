@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.ticketbooking.backend.entity.Event;
+import com.ticketbooking.backend.entity.Seat;
 import com.ticketbooking.backend.entity.User;
 import com.ticketbooking.backend.entity.WaitlistEntry;
 
@@ -91,6 +92,26 @@ public interface WaitlistRepository
             Event event
     );
 
+    // =========================================================
+    // FIND OFFERED ENTRY FOR USER
+    // =========================================================
+
+    List<WaitlistEntry>
+    findByEventAndUserAndStatus(
+            Event event,
+            User user,
+            WaitlistEntry.Status status
+    );
+
+    // =========================================================
+    // FIND WAITLIST ENTRY BY OFFERED SEAT
+    // =========================================================
+
+    Optional<WaitlistEntry>
+    findByOfferedSeatAndStatus(
+            Seat offeredSeat,
+            WaitlistEntry.Status status
+    );
     // =========================================================
     // NEXT POSITION
     // =========================================================

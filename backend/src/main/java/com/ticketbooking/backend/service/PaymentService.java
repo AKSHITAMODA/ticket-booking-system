@@ -22,9 +22,11 @@ import com.ticketbooking.backend.entity.Event;
 import com.ticketbooking.backend.entity.PaymentOrder;
 import com.ticketbooking.backend.entity.Seat;
 import com.ticketbooking.backend.entity.User;
+import com.ticketbooking.backend.entity.WaitlistEntry;
 import com.ticketbooking.backend.repository.EventRepository;
 import com.ticketbooking.backend.repository.PaymentOrderRepository;
 import com.ticketbooking.backend.repository.SeatRepository;
+import com.ticketbooking.backend.repository.WaitlistRepository;
 
 @Service
 public class PaymentService {
@@ -36,6 +38,7 @@ public class PaymentService {
     private final SeatRepository seatRepository;
     private final UserService userService;
     private final BookingService bookingService;
+    private final WaitlistRepository waitlistRepository;
 
     public PaymentService(
             RazorpayClient razorpayClient,
@@ -44,16 +47,17 @@ public class PaymentService {
             EventRepository eventRepository,
             SeatRepository seatRepository,
             UserService userService,
-            BookingService bookingService) {
+            BookingService bookingService,
+            WaitlistRepository waitlistRepository) {
 
         this.razorpayClient = razorpayClient;
         this.razorpayConfig = razorpayConfig;
-        this.paymentOrderRepository =
-                paymentOrderRepository;
+        this.paymentOrderRepository = paymentOrderRepository;
         this.eventRepository = eventRepository;
         this.seatRepository = seatRepository;
         this.userService = userService;
         this.bookingService = bookingService;
+        this.waitlistRepository = waitlistRepository;
     }
 
     // =========================================================
@@ -196,8 +200,56 @@ public class PaymentService {
         // Validate event availability
         // -----------------------------------------------------
 
+        /*
+         * A waitlist-offered seat is already HELD for this user.
+         *
+         * Therefore event.availableSeats may legitimately be 0.
+         *
+         * We only reject the order when the requested seats are
+         * not part of an active waitlist offer.
+         */
+
+        long offeredSeatCount = 0;
+
+        for (Long seatId : seatIds) {
+
+            Seat seat =
+                    seatRepository.findById(seatId)
+                            .orElseThrow(() ->
+                                    new RuntimeException(
+                                            "Seat not found: "
+                                                    + seatId
+                            ));
+
+            boolean isWaitlistOffered =
+                    waitlistRepository
+                            .findByOfferedSeatAndStatus(
+                                    seat,
+                                    WaitlistEntry.Status.OFFERED
+                            )
+                            .map(entry ->
+                                    entry.getUser()
+                                            .getId()
+                                            .equals(
+                                                    user.getId()
+                                            ) &&
+                                    entry.getOfferExpiresAt() != null &&
+                                    entry.getOfferExpiresAt()
+                                            .isAfter(now)
+                            )
+                            .orElse(false);
+
+            if (isWaitlistOffered) {
+                offeredSeatCount++;
+            }
+        }
+
+        int normalSeats =
+                seatIds.size() -
+                (int) offeredSeatCount;
+
         if (event.getAvailableSeats() <
-                seatIds.size()) {
+                normalSeats) {
 
             throw new RuntimeException(
                     "Not enough seats available"
@@ -501,16 +553,6 @@ public class PaymentService {
 
             // -------------------------------------------------
             // Create booking
-            //
-            // BookingService verifies:
-            //
-            // HELD
-            // +
-            // held by current user
-            // +
-            // hold not expired
-            //
-            // then converts HELD -> BOOKED.
             // -------------------------------------------------
 
             Booking booking =
@@ -521,6 +563,53 @@ public class PaymentService {
                             seatIds,
                             userEmail
                     );
+
+            // -------------------------------------------------
+            // FULFILL WAITLIST OFFER
+            // -------------------------------------------------
+
+            for (Long seatId : seatIds) {
+
+                Seat seat =
+                        seatRepository.findById(seatId)
+                                .orElse(null);
+
+                if (seat == null) {
+                    continue;
+                }
+
+                waitlistRepository
+                        .findByOfferedSeatAndStatus(
+                                seat,
+                                WaitlistEntry.Status.OFFERED
+                        )
+                        .ifPresent(waitlistEntry -> {
+
+                            /*
+                             * Only fulfill the offer belonging
+                             * to the user who just paid.
+                             */
+                            if (waitlistEntry
+                                    .getUser()
+                                    .getId()
+                                    .equals(user.getId())) {
+
+                                waitlistEntry.setStatus(
+                                        WaitlistEntry.Status.FULFILLED
+                                );
+
+                                waitlistEntry
+                                        .setOfferExpiresAt(null);
+
+                                waitlistEntry
+                                        .setOfferedSeat(null);
+
+                                waitlistRepository.save(
+                                        waitlistEntry
+                                );
+                            }
+                        });
+            }
 
             // -------------------------------------------------
             // Update payment order
