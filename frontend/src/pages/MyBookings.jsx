@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
+import { QRCodeSVG } from "qrcode.react";
 
 export default function MyBookings() {
   const navigate = useNavigate();
@@ -951,6 +952,24 @@ export default function MyBookings() {
                         </div>
 
                         <div className="flex flex-wrap gap-3">
+                          {isConfirmed && (
+                            <div className="flex flex-col items-center justify-center p-4 rounded-2xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                              <QRCodeSVG
+                                value={`BOOKING-${booking.id}`}
+                                size={140}
+                                level="H"
+                                includeMargin={true}
+                              />
+
+                              <p className="mt-3 text-xs font-bold text-slate-500 dark:text-slate-400">
+                                Scan for Ticket
+                              </p>
+
+                              <p className="mt-1 text-xs font-black text-slate-700 dark:text-slate-200">
+                                Booking #{booking.id}
+                              </p>
+                            </div>
+                          )}
 
                           <button
                             onClick={() =>
