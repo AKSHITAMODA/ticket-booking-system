@@ -456,7 +456,7 @@ export default function OrganiserBookings() {
 
                       </td>
 
-                    </tr>
+                    </tr>   
 
                   ))}
 

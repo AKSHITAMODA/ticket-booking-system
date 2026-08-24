@@ -39,6 +39,7 @@ public class PaymentService {
     private final UserService userService;
     private final BookingService bookingService;
     private final WaitlistRepository waitlistRepository;
+    private final EmailService emailService;
 
     public PaymentService(
             RazorpayClient razorpayClient,
@@ -48,7 +49,8 @@ public class PaymentService {
             SeatRepository seatRepository,
             UserService userService,
             BookingService bookingService,
-            WaitlistRepository waitlistRepository) {
+            WaitlistRepository waitlistRepository,
+            EmailService emailService) {
 
         this.razorpayClient = razorpayClient;
         this.razorpayConfig = razorpayConfig;
@@ -58,6 +60,7 @@ public class PaymentService {
         this.userService = userService;
         this.bookingService = bookingService;
         this.waitlistRepository = waitlistRepository;
+        this.emailService = emailService;
     }
 
     // =========================================================
@@ -119,11 +122,11 @@ public class PaymentService {
                     seatRepository.findByIdForUpdate(
                             seatId
                     )
-                    .orElseThrow(() ->
-                            new RuntimeException(
-                                    "Seat not found: "
-                                            + seatId
-                            ));
+                            .orElseThrow(() ->
+                                    new RuntimeException(
+                                            "Seat not found: "
+                                                    + seatId
+                                    ));
 
             // -------------------------------------------------
             // Event validation
@@ -147,8 +150,8 @@ public class PaymentService {
 
                 throw new RuntimeException(
                         "Seat " +
-                        seat.getSeatNumber() +
-                        " is not currently held"
+                                seat.getSeatNumber() +
+                                " is not currently held"
                 );
             }
 
@@ -162,8 +165,8 @@ public class PaymentService {
 
                 throw new RuntimeException(
                         "Seat " +
-                        seat.getSeatNumber() +
-                        " is held by another user"
+                                seat.getSeatNumber() +
+                                " is held by another user"
                 );
             }
 
@@ -178,6 +181,7 @@ public class PaymentService {
                 /*
                  * Release expired seat immediately.
                  */
+
                 seat.setStatus(
                         Seat.Status.AVAILABLE
                 );
@@ -190,8 +194,8 @@ public class PaymentService {
 
                 throw new RuntimeException(
                         "Seat " +
-                        seat.getSeatNumber() +
-                        " hold has expired"
+                                seat.getSeatNumber() +
+                                " hold has expired"
                 );
             }
         }
@@ -219,7 +223,7 @@ public class PaymentService {
                                     new RuntimeException(
                                             "Seat not found: "
                                                     + seatId
-                            ));
+                                    ));
 
             boolean isWaitlistOffered =
                     waitlistRepository
@@ -233,9 +237,9 @@ public class PaymentService {
                                             .equals(
                                                     user.getId()
                                             ) &&
-                                    entry.getOfferExpiresAt() != null &&
-                                    entry.getOfferExpiresAt()
-                                            .isAfter(now)
+                                            entry.getOfferExpiresAt() != null &&
+                                            entry.getOfferExpiresAt()
+                                                    .isAfter(now)
                             )
                             .orElse(false);
 
@@ -246,7 +250,7 @@ public class PaymentService {
 
         int normalSeats =
                 seatIds.size() -
-                (int) offeredSeatCount;
+                        (int) offeredSeatCount;
 
         if (event.getAvailableSeats() <
                 normalSeats) {
@@ -286,10 +290,10 @@ public class PaymentService {
 
             String receipt =
                     "ticket_" +
-                    UUID.randomUUID()
-                            .toString()
-                            .replace("-", "")
-                            .substring(0, 20);
+                            UUID.randomUUID()
+                                    .toString()
+                                    .replace("-", "")
+                                    .substring(0, 20);
 
             JSONObject orderRequest =
                     new JSONObject();
@@ -547,9 +551,9 @@ public class PaymentService {
                                     .getSeatIds()
                                     .split(",")
                     )
-                    .map(String::trim)
-                    .map(Long::valueOf)
-                    .toList();
+                            .map(String::trim)
+                            .map(Long::valueOf)
+                            .toList();
 
             // -------------------------------------------------
             // Create booking
@@ -589,6 +593,7 @@ public class PaymentService {
                              * Only fulfill the offer belonging
                              * to the user who just paid.
                              */
+
                             if (waitlistEntry
                                     .getUser()
                                     .getId()
@@ -630,6 +635,33 @@ public class PaymentService {
             paymentOrderRepository.save(
                     paymentOrder
             );
+
+            // =================================================
+            // SEND BOOKING EMAIL + QR
+            // =================================================
+
+            try {
+
+                emailService.sendBookingConfirmation(
+                        booking
+                );
+
+            } catch (Exception emailException) {
+
+                /*
+                 * Payment and booking are already successful.
+                 *
+                 * Email failure must NOT invalidate the
+                 * customer's paid booking.
+                 */
+
+                System.err.println(
+                        "Booking email failed for booking "
+                                + booking.getId()
+                                + ": "
+                                + emailException.getMessage()
+                );
+            }
 
             return booking;
 

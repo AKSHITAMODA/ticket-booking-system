@@ -55,6 +55,18 @@
             <artifactId>jjwt-api</artifactId>
             <version>0.12.6</version>
         </dependency>
+                <!-- Email -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- QR Code Generation -->
+        <dependency>
+            <groupId>com.google.zxing</groupId>
+            <artifactId>javase</artifactId>
+            <version>3.5.4</version>
+        </dependency>
 
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
