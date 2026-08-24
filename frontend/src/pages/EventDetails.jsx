@@ -6,7 +6,6 @@ import Navbar from "../components/Navbar";
 import { useAuth } from "../context/AuthContext";
 
 export default function EventDetails() {
-
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -23,427 +22,603 @@ export default function EventDetails() {
   const [bookingMessage, setBookingMessage] = useState("");
   const [paymentLoading, setPaymentLoading] = useState(false);
 
+  // =========================================================
+  // HOLD STATE
+  // =========================================================
+
+  const [holdExpiresAt, setHoldExpiresAt] = useState(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [holdLoading, setHoldLoading] = useState(false);
 
   // =========================================================
   // FETCH EVENT + SEATS
   // =========================================================
 
+  const fetchEventAndSeats = async () => {
+    try {
+      const eventResponse =
+        await api.get(`/api/events/${id}`);
+
+      setEvent(eventResponse.data);
+
+      const seatsResponse =
+        await api.get(`/api/events/${id}/seats`);
+
+      setSeats(seatsResponse.data);
+
+    } catch (err) {
+      console.error(err);
+
+      setError(
+        err.response?.data?.error ||
+        "Unable to load event"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
+    fetchEventAndSeats();
+  }, [id]);
 
-    const fetchEvent = async () => {
+  // =========================================================
+  // HOLD COUNTDOWN
+  // =========================================================
 
-      try {
+  useEffect(() => {
+    if (!holdExpiresAt) {
+      setRemainingSeconds(0);
+      return;
+    }
 
-        const eventResponse =
-          await api.get(`/api/events/${id}`);
+    const updateCountdown = () => {
+      const expiry =
+        new Date(holdExpiresAt).getTime();
 
-        setEvent(eventResponse.data);
+      const now = Date.now();
 
-
-        const seatsResponse =
-          await api.get(`/api/events/${id}/seats`);
-
-        setSeats(seatsResponse.data);
-
-      } catch (err) {
-
-        console.error(err);
-
-        setError(
-          err.response?.data?.error ||
-          "Unable to load event"
+      const difference =
+        Math.max(
+          0,
+          Math.floor(
+            (expiry - now) / 1000
+          )
         );
 
-      } finally {
+      setRemainingSeconds(
+        difference
+      );
 
-        setLoading(false);
+      if (difference <= 0) {
+        setHoldExpiresAt(null);
+        setSelectedSeats([]);
 
+        setBookingMessage(
+          "Your seat hold has expired. Please select your seats again."
+        );
+
+        fetchEventAndSeats();
       }
     };
 
-    fetchEvent();
+    updateCountdown();
 
-  }, [id]);
+    const interval =
+      setInterval(
+        updateCountdown,
+        1000
+      );
 
+    return () =>
+      clearInterval(interval);
+
+  }, [holdExpiresAt]);
+
+  // =========================================================
+  // FORMAT COUNTDOWN
+  // =========================================================
+
+  const formatCountdown = () => {
+    const minutes =
+      Math.floor(
+        remainingSeconds / 60
+      );
+
+    const seconds =
+      remainingSeconds % 60;
+
+    return `${String(minutes).padStart(
+      2,
+      "0"
+    )}:${String(seconds).padStart(
+      2,
+      "0"
+    )}`;
+  };
 
   // =========================================================
   // LOAD RAZORPAY
   // =========================================================
 
   const loadRazorpayScript = () => {
-
     return new Promise((resolve) => {
-
       if (window.Razorpay) {
-
         resolve(true);
         return;
-
       }
 
       const script =
-        document.createElement("script");
+        document.createElement(
+          "script"
+        );
 
       script.src =
         "https://checkout.razorpay.com/v1/checkout.js";
 
-      script.onload = () => resolve(true);
+      script.onload = () =>
+        resolve(true);
 
-      script.onerror = () => resolve(false);
+      script.onerror = () =>
+        resolve(false);
 
-      document.body.appendChild(script);
-
+      document.body.appendChild(
+        script
+      );
     });
-
   };
-
 
   // =========================================================
   // TOGGLE SEAT
   // =========================================================
 
   const toggleSeat = (seat) => {
-
-    if (seat.status === "BOOKED") {
+    if (seat.status !== "AVAILABLE") {
       return;
     }
 
-    setSelectedSeats((previous) => {
+    setBookingMessage("");
 
-      if (previous.includes(seat.id)) {
+    setSelectedSeats(
+      (previous) => {
 
-        return previous.filter(
-          (seatId) => seatId !== seat.id
-        );
+        if (
+          previous.includes(
+            seat.id
+          )
+        ) {
+          return previous.filter(
+            (seatId) =>
+              seatId !== seat.id
+          );
+        }
 
+        return [
+          ...previous,
+          seat.id,
+        ];
       }
-
-      return [
-        ...previous,
-        seat.id
-      ];
-
-    });
-
+    );
   };
-
 
   // =========================================================
   // GET SELECTED SEAT NAMES
   // =========================================================
 
   const getSelectedSeatNames = () => {
-
     return seats
       .filter((seat) =>
-        selectedSeats.includes(seat.id)
+        selectedSeats.includes(
+          seat.id
+        )
       )
-      .map((seat) => seat.seatNumber);
-
+      .map(
+        (seat) =>
+          seat.seatNumber
+      );
   };
 
+  // =========================================================
+  // HOLD SELECTED SEATS
+  // =========================================================
+
+  const holdSelectedSeats =
+    async () => {
+
+      if (!user) {
+        navigate("/login");
+        return false;
+      }
+
+      if (
+        selectedSeats.length === 0
+      ) {
+        setBookingMessage(
+          "Please select at least one seat."
+        );
+
+        return false;
+      }
+
+      setHoldLoading(true);
+      setBookingMessage("");
+
+      try {
+        const response =
+          await api.post(
+            `/api/events/${id}/seats/hold`,
+            {
+              seatIds:
+                selectedSeats,
+            }
+          );
+
+        const expiresAt =
+          response.data.expiresAt;
+
+        setHoldExpiresAt(
+          expiresAt
+        );
+
+        /*
+         * Update the local seat map.
+         */
+        setSeats(
+          (previousSeats) =>
+            previousSeats.map(
+              (seat) =>
+                selectedSeats.includes(
+                  seat.id
+                )
+                  ? {
+                      ...seat,
+                      status: "HELD",
+                      holdExpiresAt:
+                        expiresAt,
+                    }
+                  : seat
+            )
+        );
+
+        setBookingMessage(
+          "Seats held successfully. Complete payment before the timer expires."
+        );
+
+        return true;
+
+      } catch (err) {
+        console.error(
+          "Seat hold failed:",
+          err
+        );
+
+        setBookingMessage(
+          err.response?.data?.error ||
+          "Unable to hold the selected seats."
+        );
+
+        /*
+         * Refresh because another user may
+         * have booked/held one of the seats.
+         */
+        await fetchEventAndSeats();
+
+        return false;
+
+      } finally {
+        setHoldLoading(false);
+      }
+    };
 
   // =========================================================
   // PAYMENT / BOOKING
   // =========================================================
 
-  const handleBooking = async () => {
+  const handleBooking =
+    async () => {
 
-    if (!user) {
-
-      navigate("/login");
-      return;
-
-    }
-
-
-    if (selectedSeats.length === 0) {
-
-      setBookingMessage(
-        "Please select at least one seat."
-      );
-
-      return;
-
-    }
-
-
-    if (
-      selectedSeats.length >
-      event.availableSeats
-    ) {
-
-      setBookingMessage(
-        "Not enough seats available."
-      );
-
-      return;
-
-    }
-
-
-    setBooking(true);
-    setPaymentLoading(true);
-    setBookingMessage("");
-
-
-    try {
-
-      // =====================================================
-      // STEP 1: LOAD RAZORPAY
-      // =====================================================
-
-      const razorpayLoaded =
-        await loadRazorpayScript();
-
-
-      if (!razorpayLoaded) {
-
-        throw new Error(
-          "Unable to load Razorpay. Please check your internet connection."
-        );
-
+      if (!user) {
+        navigate("/login");
+        return;
       }
 
+      if (
+        selectedSeats.length === 0
+      ) {
+        setBookingMessage(
+          "Please select at least one seat."
+        );
 
-      // =====================================================
-      // STEP 2: CREATE PAYMENT ORDER
-      // =====================================================
+        return;
+      }
 
-      const orderResponse =
-        await api.post(
-          "/api/payments/create-order",
-          {
-            eventId: Number(id),
+      if (
+        event.availableSeats <
+        selectedSeats.length
+      ) {
+        setBookingMessage(
+          "Not enough seats available."
+        );
 
-            numberOfSeats:
-              selectedSeats.length,
+        return;
+      }
 
-            seatIds:
-              selectedSeats
+      setBooking(true);
+      setPaymentLoading(true);
+      setBookingMessage("");
+
+      try {
+
+        // =====================================================
+        // STEP 1: HOLD SEATS
+        // =====================================================
+
+        const holdSuccessful =
+          await holdSelectedSeats();
+
+        if (!holdSuccessful) {
+          setBooking(false);
+          setPaymentLoading(false);
+          return;
+        }
+
+        // =====================================================
+        // STEP 2: LOAD RAZORPAY
+        // =====================================================
+
+        const razorpayLoaded =
+          await loadRazorpayScript();
+
+        if (!razorpayLoaded) {
+          throw new Error(
+            "Unable to load Razorpay. Please check your internet connection."
+          );
+        }
+
+        // =====================================================
+        // STEP 3: CREATE PAYMENT ORDER
+        // =====================================================
+
+        const orderResponse =
+          await api.post(
+            "/api/payments/create-order",
+            {
+              eventId: Number(id),
+              seatIds:
+                selectedSeats,
+            }
+          );
+
+        const order =
+          orderResponse.data;
+
+        // =====================================================
+        // STEP 4: OPEN RAZORPAY
+        // =====================================================
+
+        const options = {
+          key: order.key,
+
+          amount: order.amount,
+
+          currency:
+            order.currency,
+
+          name:
+            "Ticket Booking System",
+
+          description:
+            `${order.eventTitle} - ${selectedSeats.length} ticket(s)`,
+
+          order_id:
+            order.orderId,
+
+          prefill: {
+            name:
+              user.name || "",
+
+            email:
+              user.email || "",
+          },
+
+          theme: {
+            color:
+              "#4f46e5",
+          },
+
+          // ===================================================
+          // PAYMENT SUCCESS
+          // ===================================================
+
+          handler:
+            async function (
+              response
+            ) {
+
+              try {
+
+                const verifyResponse =
+                  await api.post(
+                    "/api/payments/verify",
+                    {
+                      razorpayOrderId:
+                        response.razorpay_order_id,
+
+                      razorpayPaymentId:
+                        response.razorpay_payment_id,
+
+                      razorpaySignature:
+                        response.razorpay_signature,
+                    }
+                  );
+
+                console.log(
+                  "Payment verified:",
+                  verifyResponse.data
+                );
+
+                // ---------------------------------------------
+                // Update local seats
+                // ---------------------------------------------
+
+                setSeats(
+                  (previousSeats) =>
+                    previousSeats.map(
+                      (seat) =>
+                        selectedSeats.includes(
+                          seat.id
+                        )
+                          ? {
+                              ...seat,
+                              status:
+                                "BOOKED",
+                              heldByUserId:
+                                null,
+                              holdExpiresAt:
+                                null,
+                            }
+                          : seat
+                    )
+                );
+
+                // ---------------------------------------------
+                // Update available count
+                // ---------------------------------------------
+
+                setEvent(
+                  (previousEvent) => ({
+                    ...previousEvent,
+
+                    availableSeats:
+                      previousEvent.availableSeats -
+                      selectedSeats.length,
+                  })
+                );
+
+                // ---------------------------------------------
+                // Clear hold
+                // ---------------------------------------------
+
+                setHoldExpiresAt(
+                  null
+                );
+
+                setRemainingSeconds(
+                  0
+                );
+
+                setBookingMessage(
+                  "Payment successful! Your booking is confirmed."
+                );
+
+                setSelectedSeats([]);
+
+              } catch (err) {
+
+                console.error(
+                  "Payment verification failed:",
+                  err
+                );
+
+                setBookingMessage(
+                  err.response?.data?.error ||
+                  "Payment verification failed."
+                );
+
+                /*
+                 * Refresh actual database state.
+                 */
+                await fetchEventAndSeats();
+
+              } finally {
+
+                setBooking(false);
+                setPaymentLoading(false);
+              }
+            },
+
+          // ===================================================
+          // PAYMENT MODAL CLOSED
+          // ===================================================
+
+          modal: {
+            ondismiss:
+              async function () {
+
+                setBooking(false);
+                setPaymentLoading(
+                  false
+                );
+
+                setBookingMessage(
+                  "Payment cancelled. Your seats remain held until the timer expires."
+                );
+
+                /*
+                 * IMPORTANT:
+                 * We don't immediately release the seats here.
+                 *
+                 * The backend hold remains valid until its
+                 * expiry time.
+                 */
+              },
+          },
+        };
+
+        const razorpay =
+          new window.Razorpay(
+            options
+          );
+
+        // =====================================================
+        // PAYMENT FAILED
+        // =====================================================
+
+        razorpay.on(
+          "payment.failed",
+          function (
+            response
+          ) {
+
+            console.error(
+              "Payment failed:",
+              response
+            );
+
+            setBookingMessage(
+              response.error
+                ?.description ||
+              "Payment failed. Your seats remain held until the timer expires."
+            );
+
+            setBooking(false);
+            setPaymentLoading(
+              false
+            );
           }
         );
 
-
-      const order =
-        orderResponse.data;
-
-
-      // =====================================================
-      // STEP 3: OPEN RAZORPAY
-      // =====================================================
-
-      const options = {
-
-        key: order.key,
-
-        amount: order.amount,
-
-        currency: order.currency,
-
-        name: "Ticket Booking System",
-
-        description:
-          `${order.eventTitle} - ${selectedSeats.length} ticket(s)`,
-
-        order_id:
-          order.orderId,
-
-
-        prefill: {
-
-          name:
-            user.name || "",
-
-          email:
-            user.email || ""
-
-        },
-
-
-        theme: {
-
-          color: "#4f46e5"
-
-        },
-
-
-        // ===================================================
-        // PAYMENT SUCCESS
-        // ===================================================
-
-        handler: async function (response) {
-
-          try {
-
-            const verifyResponse =
-              await api.post(
-                "/api/payments/verify",
-                {
-
-                  razorpayOrderId:
-                    response.razorpay_order_id,
-
-                  razorpayPaymentId:
-                    response.razorpay_payment_id,
-
-                  razorpaySignature:
-                    response.razorpay_signature,
-
-                  seatIds:
-                    selectedSeats
-
-                }
-              );
-
-
-            console.log(
-              "Payment verified:",
-              verifyResponse.data
-            );
-
-
-            // =================================================
-            // UPDATE FRONTEND SEAT STATUS
-            // =================================================
-
-            setSeats((previousSeats) =>
-
-              previousSeats.map((seat) =>
-
-                selectedSeats.includes(seat.id)
-
-                  ? {
-                      ...seat,
-                      status: "BOOKED"
-                    }
-
-                  : seat
-
-              )
-
-            );
-
-
-            setEvent((previousEvent) => ({
-
-              ...previousEvent,
-
-              availableSeats:
-                previousEvent.availableSeats -
-                selectedSeats.length
-
-            }));
-
-
-            setBookingMessage(
-              "Payment successful! Your booking is confirmed."
-            );
-
-
-            setSelectedSeats([]);
-
-          } catch (err) {
-
-            console.error(
-              "Payment verification failed:",
-              err
-            );
-
-
-            setBookingMessage(
-              err.response?.data?.error ||
-              "Payment verification failed."
-            );
-
-          } finally {
-
-            setBooking(false);
-            setPaymentLoading(false);
-
-          }
-
-        },
-
-
-        // ===================================================
-        // PAYMENT MODAL CLOSED
-        // ===================================================
-
-        modal: {
-
-          ondismiss: function () {
-
-            setBooking(false);
-            setPaymentLoading(false);
-
-            setBookingMessage(
-              "Payment cancelled."
-            );
-
-          }
-
-        }
-
-      };
-
-
-      const razorpay =
-        new window.Razorpay(options);
-
-
-      // =====================================================
-      // PAYMENT FAILED
-      // =====================================================
-
-      razorpay.on(
-        "payment.failed",
-        function (response) {
-
-          console.error(
-            "Payment failed:",
-            response
-          );
-
-
-          setBookingMessage(
-            response.error?.description ||
-            "Payment failed. Please try again."
-          );
-
-
-          setBooking(false);
-          setPaymentLoading(false);
-
-        }
-      );
-
-
-      razorpay.open();
-
-
-    } catch (err) {
-
-      console.error(
-        "Payment order error:",
-        err
-      );
-
-
-      setBookingMessage(
-        err.response?.data?.error ||
-        err.message ||
-        "Unable to start payment."
-      );
-
-
-      setBooking(false);
-      setPaymentLoading(false);
-
-    }
-
-  };
-
+        razorpay.open();
+
+      } catch (err) {
+
+        console.error(
+          "Payment order error:",
+          err
+        );
+
+        setBookingMessage(
+          err.response?.data?.error ||
+          err.message ||
+          "Unable to start payment."
+        );
+
+        setBooking(false);
+        setPaymentLoading(
+          false
+        );
+      }
+    };
 
   // =========================================================
   // LOADING
@@ -452,7 +627,6 @@ export default function EventDetails() {
   if (loading) {
 
     return (
-
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
         <Navbar />
@@ -480,11 +654,8 @@ export default function EventDetails() {
         </div>
 
       </div>
-
     );
-
   }
-
 
   // =========================================================
   // ERROR
@@ -493,7 +664,6 @@ export default function EventDetails() {
   if (error || !event) {
 
     return (
-
       <div className="min-h-screen bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
 
         <Navbar />
@@ -511,11 +681,14 @@ export default function EventDetails() {
             </h2>
 
             <p className="mt-3 text-slate-500 dark:text-slate-400">
-              {error || "This event does not exist."}
+              {error ||
+                "This event does not exist."}
             </p>
 
             <button
-              onClick={() => navigate("/events")}
+              onClick={() =>
+                navigate("/events")
+              }
               className="mt-7 px-6 py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition"
             >
               ← Back to Events
@@ -526,11 +699,8 @@ export default function EventDetails() {
         </div>
 
       </div>
-
     );
-
   }
-
 
   // =========================================================
   // PRICE
@@ -539,7 +709,6 @@ export default function EventDetails() {
   const totalPrice =
     Number(event.price) *
     selectedSeats.length;
-
 
   const formattedDate =
     new Date(
@@ -550,10 +719,9 @@ export default function EventDetails() {
         weekday: "long",
         day: "numeric",
         month: "long",
-        year: "numeric"
+        year: "numeric",
       }
     );
-
 
   const formattedDateTime =
     new Date(
@@ -565,25 +733,21 @@ export default function EventDetails() {
         month: "short",
         year: "numeric",
         hour: "numeric",
-        minute: "2-digit"
+        minute: "2-digit",
       }
     );
 
-
   const selectedSeatNames =
     getSelectedSeatNames();
-
 
   // =========================================================
   // PAGE
   // =========================================================
 
   return (
-
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
 
       <Navbar />
-
 
       {/* =====================================================
           HERO
@@ -595,16 +759,16 @@ export default function EventDetails() {
 
         <div className="absolute -bottom-40 -left-20 w-96 h-96 rounded-full bg-indigo-400/20 blur-3xl" />
 
-
         <div className="relative max-w-7xl mx-auto px-6 lg:px-8 py-16 md:py-20">
 
           <button
-            onClick={() => navigate("/events")}
+            onClick={() =>
+              navigate("/events")
+            }
             className="inline-flex items-center gap-2 text-white/75 hover:text-white font-medium transition"
           >
             ← Back to events
           </button>
-
 
           <div className="mt-10 grid lg:grid-cols-3 gap-10 items-end">
 
@@ -614,16 +778,13 @@ export default function EventDetails() {
                 🎟️ Upcoming Event
               </div>
 
-
               <p className="mt-6 text-indigo-200 font-semibold">
                 {formattedDate}
               </p>
 
-
               <h1 className="mt-3 text-4xl md:text-5xl lg:text-6xl font-black tracking-tight leading-tight">
                 {event.title}
               </h1>
-
 
               <div className="mt-5 flex flex-wrap gap-x-6 gap-y-3 text-indigo-100">
 
@@ -638,7 +799,6 @@ export default function EventDetails() {
               </div>
 
             </div>
-
 
             <div className="lg:text-right">
 
@@ -662,7 +822,6 @@ export default function EventDetails() {
 
       </section>
 
-
       {/* =====================================================
           CONTENT
       ===================================================== */}
@@ -671,13 +830,11 @@ export default function EventDetails() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
 
-
           {/* =================================================
               LEFT
           ================================================= */}
 
           <div className="lg:col-span-2 space-y-8">
-
 
             {/* ABOUT */}
 
@@ -703,14 +860,12 @@ export default function EventDetails() {
 
               </div>
 
-
               <p className="mt-7 text-slate-600 dark:text-slate-300 leading-8">
                 {event.description ||
                   "Join us for an unforgettable experience."}
               </p>
 
             </section>
-
 
             {/* EVENT DETAILS */}
 
@@ -736,9 +891,7 @@ export default function EventDetails() {
 
               </div>
 
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-8">
-
 
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5">
 
@@ -756,7 +909,6 @@ export default function EventDetails() {
 
                 </div>
 
-
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5">
 
                   <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
@@ -773,7 +925,6 @@ export default function EventDetails() {
 
                 </div>
 
-
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5">
 
                   <div className="w-10 h-10 rounded-xl bg-white dark:bg-slate-900 flex items-center justify-center shadow-sm">
@@ -789,7 +940,6 @@ export default function EventDetails() {
                   </p>
 
                 </div>
-
 
                 <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5">
 
@@ -819,7 +969,6 @@ export default function EventDetails() {
 
             </section>
 
-
             {/* =================================================
                 SEAT MAP
             ================================================= */}
@@ -846,7 +995,6 @@ export default function EventDetails() {
 
               </div>
 
-
               {/* SCREEN */}
 
               <div className="mt-8">
@@ -859,48 +1007,38 @@ export default function EventDetails() {
 
               </div>
 
-
               {/* LEGEND */}
 
               <div className="flex flex-wrap justify-center gap-5 mt-7 mb-8 text-xs font-semibold text-slate-500 dark:text-slate-400">
 
                 <div className="flex items-center gap-2">
-
                   <span className="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700" />
-
                   Available
-
                 </div>
 
-
                 <div className="flex items-center gap-2">
-
                   <span className="w-4 h-4 rounded bg-indigo-600" />
-
                   Selected
-
                 </div>
 
+                <div className="flex items-center gap-2">
+                  <span className="w-4 h-4 rounded bg-amber-400" />
+                  Held
+                </div>
 
                 <div className="flex items-center gap-2">
-
                   <span className="w-4 h-4 rounded bg-red-500" />
-
                   Booked
-
                 </div>
 
               </div>
-
 
               {/* SEATS */}
 
               {seats.length === 0 ? (
 
                 <div className="text-center py-10 text-slate-400">
-
                   No seats have been generated for this event.
-
                 </div>
 
               ) : (
@@ -912,20 +1050,39 @@ export default function EventDetails() {
                     {seats.map((seat) => {
 
                       const isSelected =
-                        selectedSeats.includes(seat.id);
+                        selectedSeats.includes(
+                          seat.id
+                        );
 
                       const isBooked =
-                        seat.status === "BOOKED";
+                        seat.status ===
+                        "BOOKED";
 
+                      const isHeld =
+                        seat.status ===
+                        "HELD";
 
                       return (
-
                         <button
                           key={seat.id}
                           type="button"
-                          disabled={isBooked}
+                          disabled={
+                            isBooked ||
+                            isHeld ||
+                            holdLoading ||
+                            paymentLoading
+                          }
                           onClick={() =>
-                            toggleSeat(seat)
+                            toggleSeat(
+                              seat
+                            )
+                          }
+                          title={
+                            isBooked
+                              ? `${seat.seatNumber} is booked`
+                              : isHeld
+                              ? `${seat.seatNumber} is temporarily held`
+                              : `Select ${seat.seatNumber}`
                           }
                           className={`
                             h-10
@@ -933,22 +1090,21 @@ export default function EventDetails() {
                             text-xs
                             font-bold
                             transition-all
+
                             ${
                               isBooked
                                 ? "bg-red-500 text-white cursor-not-allowed"
+                                : isHeld
+                                ? "bg-amber-400 text-amber-950 cursor-not-allowed"
                                 : isSelected
                                 ? "bg-indigo-600 text-white shadow-lg shadow-indigo-200 dark:shadow-indigo-950/50 scale-105"
                                 : "bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-indigo-100 dark:hover:bg-indigo-900"
                             }
                           `}
                         >
-
                           {seat.seatNumber}
-
                         </button>
-
                       );
-
                     })}
 
                   </div>
@@ -957,7 +1113,6 @@ export default function EventDetails() {
 
               )}
 
-
               {/* SELECTED SEATS */}
 
               <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
@@ -965,7 +1120,6 @@ export default function EventDetails() {
                 <p className="text-xs uppercase tracking-wide font-bold text-slate-400">
                   Selected seats
                 </p>
-
 
                 {selectedSeatNames.length > 0 ? (
 
@@ -997,7 +1151,6 @@ export default function EventDetails() {
               </div>
 
             </section>
-
 
             {/* ORGANISER */}
 
@@ -1043,7 +1196,6 @@ export default function EventDetails() {
 
           </div>
 
-
           {/* =================================================
               BOOKING SIDEBAR
           ================================================= */}
@@ -1055,7 +1207,6 @@ export default function EventDetails() {
               <p className="text-sm font-semibold text-slate-400">
                 Ticket price
               </p>
-
 
               <div className="flex items-end gap-2 mt-1">
 
@@ -1069,9 +1220,30 @@ export default function EventDetails() {
 
               </div>
 
-
               <div className="h-px bg-slate-200 dark:bg-slate-800 my-7" />
 
+              {/* HOLD TIMER */}
+
+              {holdExpiresAt &&
+                remainingSeconds > 0 && (
+
+                  <div className="mb-6 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-5 text-center">
+
+                    <p className="text-xs uppercase tracking-wider font-bold text-amber-600 dark:text-amber-400">
+                      Seats held for you
+                    </p>
+
+                    <p className="mt-2 text-4xl font-black text-amber-600 dark:text-amber-400 tabular-nums">
+                      {formatCountdown()}
+                    </p>
+
+                    <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+                      Complete your payment before the timer expires.
+                    </p>
+
+                  </div>
+
+                )}
 
               {/* AVAILABILITY */}
 
@@ -1091,7 +1263,6 @@ export default function EventDetails() {
 
               </div>
 
-
               {/* SELECTED */}
 
               <div>
@@ -1101,13 +1272,10 @@ export default function EventDetails() {
                 </p>
 
                 <p className="mt-1 text-2xl font-black">
-
                   {selectedSeats.length}
-
                 </p>
 
               </div>
-
 
               {/* SELECTED SEAT NAMES */}
 
@@ -1136,7 +1304,6 @@ export default function EventDetails() {
 
               )}
 
-
               {/* PRICE */}
 
               <div className="mt-7 space-y-4">
@@ -1153,9 +1320,7 @@ export default function EventDetails() {
 
                 </div>
 
-
                 <div className="h-px bg-slate-200 dark:bg-slate-800" />
-
 
                 <div className="flex justify-between items-center">
 
@@ -1171,7 +1336,6 @@ export default function EventDetails() {
 
               </div>
 
-
               {/* PAYMENT */}
 
               {event.availableSeats === 0 ? (
@@ -1186,27 +1350,32 @@ export default function EventDetails() {
               ) : (
 
                 <button
-                  onClick={handleBooking}
+                  onClick={
+                    handleBooking
+                  }
                   disabled={
                     booking ||
                     paymentLoading ||
+                    holdLoading ||
                     selectedSeats.length === 0
                   }
                   className="w-full mt-7 py-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
 
-                  {paymentLoading
+                  {holdLoading
+                    ? "Holding Seats..."
+                    : paymentLoading
                     ? "Opening Payment..."
                     : user
-                    ? selectedSeats.length === 0
+                    ? selectedSeats.length ===
+                      0
                       ? "Select Seats"
-                      : "💳 Pay & Book Tickets"
+                      : "💳 Hold & Pay"
                     : "Login to Book"}
 
                 </button>
 
               )}
-
 
               {/* MESSAGE */}
 
@@ -1216,8 +1385,16 @@ export default function EventDetails() {
                   className={`mt-4 p-3 rounded-xl text-center text-sm font-semibold ${
                     bookingMessage
                       .toLowerCase()
-                      .includes("success")
+                      .includes(
+                        "success"
+                      )
                       ? "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400"
+                      : bookingMessage
+                          .toLowerCase()
+                          .includes(
+                            "held successfully"
+                          )
+                      ? "bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400"
                       : "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400"
                   }`}
                 >
@@ -1225,7 +1402,6 @@ export default function EventDetails() {
                 </div>
 
               )}
-
 
               {/* TRUST */}
 
@@ -1254,7 +1430,5 @@ export default function EventDetails() {
       </main>
 
     </div>
-
   );
-
 }

@@ -4,6 +4,7 @@ export default function SeatSelection({
   setSelectedSeats,
 }) {
   const handleSeatClick = (seat) => {
+    // Only AVAILABLE seats can be selected.
     if (seat.status !== "AVAILABLE") {
       return;
     }
@@ -89,6 +90,14 @@ export default function SeatSelection({
                 seat.status ===
                 "AVAILABLE";
 
+              const held =
+                seat.status ===
+                "HELD";
+
+              const booked =
+                seat.status ===
+                "BOOKED";
+
               return (
                 <button
                   key={seat.id}
@@ -102,6 +111,8 @@ export default function SeatSelection({
                   title={
                     available
                       ? `Select ${seat.seatNumber}`
+                      : held
+                      ? `${seat.seatNumber} is temporarily held`
                       : `${seat.seatNumber} is booked`
                   }
                   className={`
@@ -114,8 +125,10 @@ export default function SeatSelection({
                     transition-all
 
                     ${
-                      !available
+                      booked
                         ? "bg-red-100 dark:bg-red-950/40 text-red-500 border-red-200 dark:border-red-900 cursor-not-allowed"
+                        : held
+                        ? "bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-800 cursor-not-allowed"
                         : selected
                         ? "bg-indigo-600 text-white border-indigo-600 scale-105 shadow-lg"
                         : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-600 hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
@@ -135,6 +148,8 @@ export default function SeatSelection({
 
         <div className="flex flex-wrap justify-center gap-6 mt-10">
 
+          {/* AVAILABLE */}
+
           <div className="flex items-center gap-2">
 
             <div className="w-4 h-4 rounded bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600" />
@@ -145,6 +160,8 @@ export default function SeatSelection({
 
           </div>
 
+          {/* SELECTED */}
+
           <div className="flex items-center gap-2">
 
             <div className="w-4 h-4 rounded bg-indigo-600" />
@@ -154,6 +171,20 @@ export default function SeatSelection({
             </span>
 
           </div>
+
+          {/* HELD */}
+
+          <div className="flex items-center gap-2">
+
+            <div className="w-4 h-4 rounded bg-amber-100 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800" />
+
+            <span className="text-xs text-slate-500">
+              Temporarily held
+            </span>
+
+          </div>
+
+          {/* BOOKED */}
 
           <div className="flex items-center gap-2">
 
@@ -179,8 +210,7 @@ export default function SeatSelection({
 
         <p className="mt-2 font-bold">
 
-          {selectedSeats.length ===
-          0
+          {selectedSeats.length === 0
             ? "No seats selected"
             : selectedSeats
                 .map(
