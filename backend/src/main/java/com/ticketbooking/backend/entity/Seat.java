@@ -1,5 +1,7 @@
 package com.ticketbooking.backend.entity;
 
+import java.time.LocalDateTime;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -26,6 +28,7 @@ public class Seat {
 
     public enum Status {
         AVAILABLE,
+        HELD,
         BOOKED
     }
 
@@ -53,7 +56,19 @@ public class Seat {
     @JoinColumn(name = "event_id", nullable = false)
     private Event event;
 
-    // ================= GETTERS =================
+    // =========================================================
+    // HOLD INFORMATION
+    // =========================================================
+
+    @Column(name = "held_by_user_id")
+    private Long heldByUserId;
+
+    @Column(name = "hold_expires_at")
+    private LocalDateTime holdExpiresAt;
+
+    // =========================================================
+    // GETTERS
+    // =========================================================
 
     public Long getId() {
         return id;
@@ -75,7 +90,17 @@ public class Seat {
         return event;
     }
 
-    // ================= SETTERS =================
+    public Long getHeldByUserId() {
+        return heldByUserId;
+    }
+
+    public LocalDateTime getHoldExpiresAt() {
+        return holdExpiresAt;
+    }
+
+    // =========================================================
+    // SETTERS
+    // =========================================================
 
     public void setSeatNumber(String seatNumber) {
         this.seatNumber = seatNumber;
@@ -91,5 +116,13 @@ public class Seat {
 
     public void setEvent(Event event) {
         this.event = event;
+    }
+
+    public void setHeldByUserId(Long heldByUserId) {
+        this.heldByUserId = heldByUserId;
+    }
+
+    public void setHoldExpiresAt(LocalDateTime holdExpiresAt) {
+        this.holdExpiresAt = holdExpiresAt;
     }
 }
