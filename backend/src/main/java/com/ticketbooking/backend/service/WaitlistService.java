@@ -57,6 +57,7 @@ public class WaitlistService {
             String userEmail) {
 
         if (category == null) {
+
             throw new RuntimeException(
                     "Seat category is required"
             );
@@ -73,8 +74,9 @@ public class WaitlistService {
                                 ));
 
         /*
-         * A user cannot have multiple active waitlist
-         * entries for the same event and category.
+         * A user cannot have multiple active
+         * waitlist entries for the same event
+         * and category.
          */
         var existing =
                 waitlistRepository
@@ -100,16 +102,18 @@ public class WaitlistService {
             }
         }
 
-        Integer maxPosition =
-                waitlistRepository.findMaxPosition(
+        /*
+         * Determine the next ACTIVE position.
+         *
+         * We deliberately do not use MAX(position)
+         * because cancelled/expired entries should
+         * not permanently consume queue positions.
+         */
+        int nextPosition =
+                getNextActivePosition(
                         event,
                         category
                 );
-
-        int nextPosition =
-                maxPosition == null
-                        ? 1
-                        : maxPosition + 1;
 
         WaitlistEntry entry =
                 new WaitlistEntry();
@@ -118,9 +122,11 @@ public class WaitlistService {
         entry.setUser(user);
         entry.setCategory(category);
         entry.setPosition(nextPosition);
+
         entry.setStatus(
                 WaitlistEntry.Status.WAITING
         );
+
         entry.setOfferedSeat(null);
         entry.setOfferExpiresAt(null);
 
@@ -174,7 +180,8 @@ public class WaitlistService {
                 userService.findByEmail(userEmail);
 
         WaitlistEntry entry =
-                waitlistRepository.findById(entryId)
+                waitlistRepository
+                        .findById(entryId)
                         .orElseThrow(() ->
                                 new RuntimeException(
                                         "Waitlist entry not found"
@@ -223,6 +230,22 @@ public class WaitlistService {
             );
         }
 
+        /*
+         * Remember whether this customer currently
+         * owns an offered seat.
+         */
+        Seat offeredSeat =
+                entry.getOfferedSeat();
+
+        Event event =
+                entry.getEvent();
+
+        WaitlistEntry.Category category =
+                entry.getCategory();
+
+        /*
+         * Cancel the waitlist entry first.
+         */
         entry.setStatus(
                 WaitlistEntry.Status.CANCELLED
         );
@@ -230,7 +253,84 @@ public class WaitlistService {
         entry.setOfferedSeat(null);
         entry.setOfferExpiresAt(null);
 
-        return waitlistRepository.save(entry);
+        waitlistRepository.save(entry);
+
+        /*
+         * If this customer had an OFFERED seat,
+         * release that seat.
+         */
+        if (offeredSeat != null &&
+                offeredSeat.getStatus() ==
+                        Seat.Status.HELD &&
+                entry.getUser()
+                        .getId()
+                        .equals(
+                                offeredSeat
+                                        .getHeldByUserId()
+                        )) {
+
+            offeredSeat.setStatus(
+                    Seat.Status.AVAILABLE
+            );
+
+            offeredSeat.setHeldByUserId(null);
+
+            offeredSeat.setHoldExpiresAt(null);
+
+            seatRepository.save(offeredSeat);
+
+            /*
+             * Re-number the remaining waiting
+             * customers.
+             *
+             * Example:
+             *
+             * Before:
+             * #1 CANCELLED
+             * #2 WAITING
+             * #3 WAITING
+             *
+             * After:
+             * #1 WAITING
+             * #2 WAITING
+             */
+            compactWaitingPositions(
+                    event,
+                    category
+            );
+
+            /*
+             * Give the released seat to the new
+             * position #1 customer.
+             */
+            offerNextCustomer(
+                    event,
+                    offeredSeat
+            );
+
+        } else {
+
+            /*
+             * Normal WAITING cancellation.
+             *
+             * Example:
+             *
+             * #1 WAITING
+             * #2 CANCELLED
+             * #3 WAITING
+             *
+             * becomes:
+             *
+             * #1 WAITING
+             * #2 WAITING
+             */
+            compactWaitingPositions(
+                    event,
+                    category
+            );
+        }
+
+        return entry;
     }
 
     // =========================================================
@@ -256,8 +356,8 @@ public class WaitlistService {
         }
 
         /*
-         * Only users waiting for the same
-         * seat category are eligible.
+         * Only customers waiting for the
+         * same seat category are eligible.
          */
         WaitlistEntry.Category category =
                 WaitlistEntry.Category.valueOf(
@@ -265,6 +365,29 @@ public class WaitlistService {
                 );
 
         List<WaitlistEntry> waitingEntries =
+                waitlistRepository
+                        .findWaitingEntriesForUpdate(
+                                event,
+                                category
+                        );
+
+        if (waitingEntries.isEmpty()) {
+            return null;
+        }
+
+        /*
+         * Make sure positions are compact
+         * before selecting the first customer.
+         */
+        compactWaitingPositions(
+                event,
+                category
+        );
+
+        /*
+         * Fetch again after compaction.
+         */
+        waitingEntries =
                 waitlistRepository
                         .findWaitingEntriesForUpdate(
                                 event,
@@ -290,11 +413,10 @@ public class WaitlistService {
                 );
 
         /*
-         * Temporarily reserve the seat for
-         * the waitlist customer.
+         * Temporarily reserve the seat.
          *
-         * We use HELD rather than BOOKED because
-         * payment has not happened yet.
+         * Payment has not happened yet,
+         * therefore status = HELD.
          */
         seat.setStatus(
                 Seat.Status.HELD
@@ -343,11 +465,6 @@ public class WaitlistService {
                 waitlistRepository
                         .findExpiredOffers(now);
 
-        /*
-         * Copy the list so that changes to the
-         * persistence context don't interfere
-         * with iteration.
-         */
         List<WaitlistEntry> entries =
                 new ArrayList<>(
                         expiredEntries
@@ -359,8 +476,14 @@ public class WaitlistService {
             Seat offeredSeat =
                     entry.getOfferedSeat();
 
+            Event event =
+                    entry.getEvent();
+
+            WaitlistEntry.Category category =
+                    entry.getCategory();
+
             /*
-             * Mark the current offer expired.
+             * Mark current offer expired.
              */
             entry.setStatus(
                     WaitlistEntry.Status.EXPIRED
@@ -389,24 +512,29 @@ public class WaitlistService {
                         Seat.Status.AVAILABLE
                 );
 
-                offeredSeat.setHeldByUserId(
-                        null
-                );
+                offeredSeat.setHeldByUserId(null);
 
-                offeredSeat.setHoldExpiresAt(
-                        null
-                );
+                offeredSeat.setHoldExpiresAt(null);
 
                 seatRepository.save(
                         offeredSeat
                 );
 
                 /*
-                 * Immediately offer the released seat
-                 * to the next customer.
+                 * Remove the expired customer from
+                 * the active queue positions.
+                 */
+                compactWaitingPositions(
+                        event,
+                        category
+                );
+
+                /*
+                 * Immediately offer the released
+                 * seat to the next customer.
                  */
                 offerNextCustomer(
-                        entry.getEvent(),
+                        event,
                         offeredSeat
                 );
             }
@@ -422,26 +550,24 @@ public class WaitlistService {
             Long entryId) {
 
         WaitlistEntry entry =
-                waitlistRepository.findById(
-                        entryId
-                ).orElseThrow(() ->
-                        new RuntimeException(
-                                "Waitlist entry not found"
-                        ));
+                waitlistRepository
+                        .findById(entryId)
+                        .orElseThrow(() ->
+                                new RuntimeException(
+                                        "Waitlist entry not found"
+                                ));
 
         entry.setStatus(
                 WaitlistEntry.Status.FULFILLED
         );
 
-        entry.setOfferExpiresAt(
-                null
-        );
+        entry.setOfferExpiresAt(null);
 
         return waitlistRepository.save(entry);
     }
 
     // =========================================================
-    // ASSIGN CANCELLED SEAT
+    // ASSIGN AVAILABLE SEAT
     // =========================================================
 
     @Transactional
@@ -456,8 +582,7 @@ public class WaitlistService {
                 seat.getEvent();
 
         /*
-         * Make sure the seat is actually available
-         * before looking for a customer.
+         * Make sure the seat is actually available.
          */
         if (seat.getStatus() !=
                 Seat.Status.AVAILABLE) {
@@ -469,5 +594,69 @@ public class WaitlistService {
                 event,
                 seat
         );
+    }
+
+    // =========================================================
+    // COMPACT WAITING POSITIONS
+    // =========================================================
+
+    private void compactWaitingPositions(
+            Event event,
+            WaitlistEntry.Category category) {
+
+        List<WaitlistEntry> waitingEntries =
+                waitlistRepository
+                        .findByEventAndCategoryAndStatusOrderByPositionAsc(
+                                event,
+                                category,
+                                WaitlistEntry.Status.WAITING
+                        );
+
+        int position = 1;
+
+        for (WaitlistEntry entry :
+                waitingEntries) {
+
+            entry.setPosition(position);
+
+            waitlistRepository.save(entry);
+
+            position++;
+        }
+    }
+
+    // =========================================================
+    // NEXT ACTIVE POSITION
+    // =========================================================
+
+    private int getNextActivePosition(
+            Event event,
+            WaitlistEntry.Category category) {
+
+        List<WaitlistEntry> waitingEntries =
+                waitlistRepository
+                        .findByEventAndCategoryAndStatusOrderByPositionAsc(
+                                event,
+                                category,
+                                WaitlistEntry.Status.WAITING
+                        );
+
+        /*
+         * If there is currently an OFFERED customer,
+         * that customer occupies the next queue slot.
+         */
+        List<WaitlistEntry> offeredEntries =
+                waitlistRepository
+                        .findByEventAndCategoryAndStatusOrderByPositionAsc(
+                                event,
+                                category,
+                                WaitlistEntry.Status.OFFERED
+                        );
+
+        int activeCount =
+                waitingEntries.size()
+                + offeredEntries.size();
+
+        return activeCount + 1;
     }
 }
