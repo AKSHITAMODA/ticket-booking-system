@@ -521,6 +521,9 @@ export default function EventDetails() {
 
                 setSelectedSeats([]);
 
+                // Redirect to My Bookings after successful payment verification
+                navigate("/my-bookings", { replace: true });
+
               } catch (err) {
 
                 console.error(
