@@ -12,6 +12,8 @@ import java.util.stream.Collectors;
 import org.json.JSONObject;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.razorpay.Order;
 import com.razorpay.RazorpayClient;
@@ -27,7 +29,6 @@ import com.ticketbooking.backend.repository.EventRepository;
 import com.ticketbooking.backend.repository.PaymentOrderRepository;
 import com.ticketbooking.backend.repository.SeatRepository;
 import com.ticketbooking.backend.repository.WaitlistRepository;
-
 @Service
 public class PaymentService {
 
@@ -636,24 +637,58 @@ public class PaymentService {
                     paymentOrder
             );
 
-            // =================================================
-            // SEND BOOKING EMAIL + QR
-            // =================================================
+        // =================================================
+        // SEND BOOKING EMAIL + QR AFTER TRANSACTION COMMIT
+        // =================================================
 
-            try {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+
+        TransactionSynchronizationManager.registerSynchronization(
+                new TransactionSynchronization() {
+
+                        @Override
+                        public void afterCommit() {
+
+                        try {
+
+                                emailService.sendBookingConfirmation(
+                                        booking
+                                );
+
+                        } catch (Exception emailException) {
+
+                                /*
+                                * Payment and booking have already
+                                * been committed successfully.
+                                *
+                                * Email failure must NEVER invalidate
+                                * the customer's paid booking.
+                                */
+
+                                System.err.println(
+                                        "Booking email failed for booking "
+                                                + booking.getId()
+                                                + ": "
+                                                + emailException.getMessage()
+                                );
+                        }
+                        }
+                }
+        );
+
+        } else {
+
+        /*
+        * Fallback in case synchronization is not active.
+        */
+
+        try {
 
                 emailService.sendBookingConfirmation(
                         booking
                 );
 
-            } catch (Exception emailException) {
-
-                /*
-                 * Payment and booking are already successful.
-                 *
-                 * Email failure must NOT invalidate the
-                 * customer's paid booking.
-                 */
+        } catch (Exception emailException) {
 
                 System.err.println(
                         "Booking email failed for booking "
@@ -661,7 +696,8 @@ public class PaymentService {
                                 + ": "
                                 + emailException.getMessage()
                 );
-            }
+        }
+        }
 
             return booking;
 
