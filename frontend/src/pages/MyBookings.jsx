@@ -167,10 +167,11 @@ export default function MyBookings() {
   };
 
   // =========================================================
-  // ACCEPT WAITLIST OFFER + PAYMENT
+  // WAITLIST OFFER PAYMENT
   // =========================================================
 
   const handleWaitlistPayment = async (entry) => {
+
     if (!entry || entry.status !== "OFFERED") {
       return;
     }
@@ -187,25 +188,13 @@ export default function MyBookings() {
     setError("");
 
     try {
-      // -----------------------------------------------------
-      // STEP 1: Accept the offered seat
-      // -----------------------------------------------------
 
-      const acceptResponse =
-        await api.post(
-          `/api/payments/waitlist/${entry.id}/accept`
-        );
+      // =====================================================
+      // STEP 1: GET EVENT + OFFERED SEAT
+      // =====================================================
 
-      const accepted =
-        acceptResponse.data;
-
-      const eventId =
-        accepted.eventId ||
-        entry.eventId;
-
-      const seatId =
-        accepted.seatId ||
-        entry.offeredSeat.id;
+      const eventId = entry.eventId;
+      const seatId = entry.offeredSeat.id;
 
       if (!eventId || !seatId) {
         throw new Error(
@@ -213,15 +202,50 @@ export default function MyBookings() {
         );
       }
 
-      // -----------------------------------------------------
-      // STEP 2: Create Razorpay payment order
-      // -----------------------------------------------------
+      // =====================================================
+      // STEP 2: CHECK OFFER EXPIRY
+      // =====================================================
+
+      if (entry.offerExpiresAt) {
+
+        const expiresAt =
+          new Date(
+            entry.offerExpiresAt
+          ).getTime();
+
+        if (
+          Number.isFinite(expiresAt) &&
+          expiresAt <= Date.now()
+        ) {
+
+          throw new Error(
+            "This seat offer has expired."
+          );
+        }
+      }
+
+      // =====================================================
+      // STEP 3: CREATE RAZORPAY ORDER
+      // =====================================================
+
+      /*
+       * IMPORTANT:
+       *
+       * DO NOT call:
+       *
+       * /api/payments/waitlist/{entryId}/accept
+       *
+       * The offered seat is already HELD for this user.
+       *
+       * The normal create-order endpoint handles the
+       * offered waitlist seat.
+       */
 
       const orderResponse =
         await api.post(
           "/api/payments/create-order",
           {
-            eventId,
+            eventId: eventId,
             seatIds: [seatId],
           }
         );
@@ -235,9 +259,9 @@ export default function MyBookings() {
         );
       }
 
-      // -----------------------------------------------------
-      // STEP 3: Make sure Razorpay is available
-      // -----------------------------------------------------
+      // =====================================================
+      // STEP 4: CHECK RAZORPAY
+      // =====================================================
 
       if (!window.Razorpay) {
         throw new Error(
@@ -245,26 +269,46 @@ export default function MyBookings() {
         );
       }
 
-      // -----------------------------------------------------
-      // STEP 4: Open Razorpay
-      // -----------------------------------------------------
+      // =====================================================
+      // STEP 5: OPEN RAZORPAY
+      // =====================================================
 
       const options = {
+
         key: order.key,
+
         amount: order.amount,
-        currency: order.currency || "INR",
+
+        currency:
+          order.currency || "INR",
+
         name: "Ticketly",
+
         description:
           entry.eventTitle ||
           "Ticket Booking",
 
-        order_id: order.orderId,
+        order_id:
+          order.orderId,
 
-        handler: async function (response) {
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+        },
+
+        theme: {
+          color: "#4f46e5",
+        },
+
+        handler: async function (
+          response
+        ) {
+
           try {
-            // -----------------------------------------------
-            // STEP 5: Verify payment
-            // -----------------------------------------------
+
+            // ===============================================
+            // STEP 6: VERIFY PAYMENT
+            // ===============================================
 
             const verifyResponse =
               await api.post(
@@ -281,21 +325,23 @@ export default function MyBookings() {
                 }
               );
 
-            // -----------------------------------------------
-            // STEP 6: Update UI
-            // -----------------------------------------------
+            // ===============================================
+            // STEP 7: UPDATE WAITLIST UI
+            // ===============================================
 
-            setWaitlist((previous) =>
-              previous.map((item) =>
-                item.id === entry.id
-                  ? {
-                      ...item,
-                      status: "FULFILLED",
-                      offeredSeat: null,
-                      offerExpiresAt: null,
-                    }
-                  : item
-              )
+            setWaitlist(
+              (previous) =>
+                previous.map(
+                  (item) =>
+                    item.id === entry.id
+                      ? {
+                          ...item,
+                          status: "FULFILLED",
+                          offeredSeat: null,
+                          offerExpiresAt: null,
+                        }
+                      : item
+                )
             );
 
             setMessage(
@@ -303,11 +349,12 @@ export default function MyBookings() {
               "Payment successful. Your ticket has been booked."
             );
 
-            // -----------------------------------------------
-            // STEP 7: Refresh bookings
-            // -----------------------------------------------
+            // ===============================================
+            // STEP 8: REFRESH BOOKINGS
+            // ===============================================
 
             try {
+
               const bookingsResponse =
                 await api.get(
                   "/api/bookings/my"
@@ -316,14 +363,18 @@ export default function MyBookings() {
               setBookings(
                 bookingsResponse.data
               );
+
             } catch (refreshError) {
+
               console.error(
                 "Unable to refresh bookings:",
                 refreshError
               );
+
             }
 
           } catch (verifyError) {
+
             console.error(
               "Payment verification error:",
               verifyError
@@ -334,23 +385,22 @@ export default function MyBookings() {
               verifyError.message ||
               "Payment verification failed."
             );
+
           } finally {
-            setPayingWaitlistId(null);
+
+            setPayingWaitlistId(
+              null
+            );
           }
         },
 
-        prefill: {
-          name: user?.name || "",
-          email: user?.email || "",
-        },
-
-        theme: {
-          color: "#4f46e5",
-        },
-
         modal: {
+
           ondismiss: function () {
-            setPayingWaitlistId(null);
+
+            setPayingWaitlistId(
+              null
+            );
 
             setMessage(
               "Payment window closed. Your offered seat is still held until the offer expires."
@@ -359,12 +409,23 @@ export default function MyBookings() {
         },
       };
 
+      // =====================================================
+      // STEP 9: CREATE RAZORPAY INSTANCE
+      // =====================================================
+
       const razorpay =
-        new window.Razorpay(options);
+        new window.Razorpay(
+          options
+        );
+
+      // =====================================================
+      // PAYMENT FAILED
+      // =====================================================
 
       razorpay.on(
         "payment.failed",
         function (response) {
+
           console.error(
             "Razorpay payment failed:",
             response
@@ -375,13 +436,20 @@ export default function MyBookings() {
             "Payment failed. Please try again."
           );
 
-          setPayingWaitlistId(null);
+          setPayingWaitlistId(
+            null
+          );
         }
       );
+
+      // =====================================================
+      // OPEN CHECKOUT
+      // =====================================================
 
       razorpay.open();
 
     } catch (err) {
+
       console.error(
         "Waitlist payment error:",
         err
@@ -393,10 +461,11 @@ export default function MyBookings() {
         "Unable to start payment."
       );
 
-      setPayingWaitlistId(null);
+      setPayingWaitlistId(
+        null
+      );
     }
   };
-
   // =========================================================
   // AUTH LOADING
   // =========================================================
