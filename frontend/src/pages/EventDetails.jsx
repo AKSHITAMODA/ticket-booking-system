@@ -77,24 +77,42 @@ export default function EventDetails() {
   }, [id]);
 
   // Browsers can restore this page from the back/forward cache after
-  // Razorpay redirects. Clear transient payment/hold state and refresh
-  // the real seat state so the button never stays stuck on "Opening Payment".
+  // Razorpay redirects. Always clear transient payment/hold state and
+  // reload the authoritative backend seat state.
   useEffect(() => {
-    const handlePageShow = () => {
+    const resetTransientStateAndRefresh = () => {
       setBooking(false);
       setPaymentLoading(false);
       setHoldLoading(false);
+
       setHoldExpiresAt(null);
       setRemainingSeconds(0);
       setSelectedSeats([]);
       setBookingMessage("");
+
       fetchEventAndSeats();
     };
 
-    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener(
+      "pageshow",
+      resetTransientStateAndRefresh
+    );
+
+    window.addEventListener(
+      "popstate",
+      resetTransientStateAndRefresh
+    );
 
     return () => {
-      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener(
+        "pageshow",
+        resetTransientStateAndRefresh
+      );
+
+      window.removeEventListener(
+        "popstate",
+        resetTransientStateAndRefresh
+      );
     };
   }, [id]);
 
@@ -494,69 +512,25 @@ export default function EventDetails() {
                 );
 
                 // ---------------------------------------------
-                // Update local seats
+                // Clear all transient payment/hold state.
                 // ---------------------------------------------
 
-                setSeats(
-                  (previousSeats) =>
-                    previousSeats.map(
-                      (seat) =>
-                        selectedSeats.includes(
-                          seat.id
-                        )
-                          ? {
-                              ...seat,
-                              status:
-                                "BOOKED",
-                              heldByUserId:
-                                null,
-                              holdExpiresAt:
-                                null,
-                            }
-                          : seat
-                    )
-                );
-
-                // ---------------------------------------------
-                // Update available count
-                // ---------------------------------------------
-
-                setEvent(
-                  (previousEvent) => ({
-                    ...previousEvent,
-                    availableSeats: Math.max(
-                      0,
-                      previousEvent.availableSeats -
-                        selectedSeats.length
-                    ),
-                  })
-                );
-
-                // ---------------------------------------------
-                // Clear hold
-                // ---------------------------------------------
-
-                setHoldExpiresAt(
-                  null
-                );
-
-                setRemainingSeconds(
-                  0
-                );
-
+                setSelectedSeats([]);
+                setHoldExpiresAt(null);
+                setRemainingSeconds(0);
                 setBookingMessage(
                   "Payment successful! Your booking is confirmed."
                 );
 
-                setSelectedSeats([]);
                 setBooking(false);
                 setPaymentLoading(false);
                 setHoldLoading(false);
 
-                // Refresh the authoritative backend seat state before redirect.
+                // The backend is the single source of truth.
+                // Refresh seats/event before redirecting.
                 await fetchEventAndSeats();
 
-                // Redirect to My Bookings after successful payment verification.
+                // Redirect only after payment verification + refresh.
                 navigate("/my-bookings", { replace: true });
 
               } catch (err) {
@@ -1348,8 +1322,8 @@ export default function EventDetails() {
 
                 <span className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600">
 
-                  {event.availableSeats > 0
-                    ? `${event.availableSeats} left`
+                  {actualAvailableSeats > 0
+                    ? `${actualAvailableSeats} left`
                     : "Sold out"}
 
                 </span>
