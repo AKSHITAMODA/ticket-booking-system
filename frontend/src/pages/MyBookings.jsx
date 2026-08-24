@@ -15,7 +15,12 @@ export default function MyBookings() {
   const [cancellingId, setCancellingId] = useState(null);
   const [message, setMessage] = useState("");
 
+  const [waitlist, setWaitlist] = useState([]);
+  const [waitlistLoading, setWaitlistLoading] = useState(true);
+  const [waitlistError, setWaitlistError] = useState("");
+
   useEffect(() => {
+
     if (authLoading) return;
 
     if (!user) {
@@ -23,23 +28,48 @@ export default function MyBookings() {
       return;
     }
 
-    const fetchBookings = async () => {
+    const fetchData = async () => {
+
       try {
-        const response = await api.get("/api/bookings/my");
-        setBookings(response.data);
+
+        const [
+          bookingsResponse,
+          waitlistResponse
+        ] = await Promise.all([
+          api.get("/api/bookings/my"),
+          api.get("/api/waitlist/my")
+        ]);
+
+        setBookings(bookingsResponse.data);
+        setWaitlist(waitlistResponse.data);
+
       } catch (err) {
-        console.error("Failed to load bookings:", err);
+
+        console.error(
+          "Failed to load bookings/waitlist:",
+          err
+        );
 
         setError(
           err.response?.data?.error ||
-            "Unable to load your bookings."
+          "Unable to load your bookings."
         );
+
+        setWaitlistError(
+          err.response?.data?.error ||
+          "Unable to load your waitlist."
+        );
+
       } finally {
+
         setLoading(false);
+        setWaitlistLoading(false);
+
       }
     };
 
-    fetchBookings();
+    fetchData();
+
   }, [user, authLoading, navigate]);
 
   // ================= CANCEL =================
@@ -87,7 +117,53 @@ export default function MyBookings() {
     }
   };
 
+  // ================= CANCEL WAITLIST =================
+
+  const handleCancelWaitlist = async (entryId) => {
+
+    const confirmed = window.confirm(
+      "Are you sure you want to leave this waitlist?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+
+      await api.delete(
+        `/api/waitlist/${entryId}`
+      );
+
+      setWaitlist((previous) =>
+        previous.map((entry) =>
+          entry.id === entryId
+            ? {
+                ...entry,
+                status: "CANCELLED"
+              }
+            : entry
+        )
+      );
+
+      setMessage(
+        "Waitlist entry cancelled successfully."
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Waitlist cancellation error:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        "Unable to cancel waitlist entry."
+      );
+    }
+  };
+
   // ================= AUTH LOADING =================
+
 
   if (authLoading) {
     return (
@@ -608,6 +684,176 @@ export default function MyBookings() {
           </div>
 
         )}
+
+        {/* ================= WAITLIST ================= */}
+
+        <section className="mt-14">
+
+          <div className="flex items-end justify-between mb-6">
+
+            <div>
+              <p className="text-sm font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                Waitlist
+              </p>
+
+              <h2 className="mt-1 text-2xl font-black">
+                Your waitlists
+              </h2>
+            </div>
+
+            <span className="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 text-sm font-bold">
+              {waitlist.filter(
+                (entry) =>
+                  entry.status === "WAITING" ||
+                  entry.status === "OFFERED"
+              ).length} active
+            </span>
+
+          </div>
+
+          {waitlistError && (
+            <div className="mb-5 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 p-4 text-red-600 dark:text-red-400 font-semibold">
+              {waitlistError}
+            </div>
+          )}
+
+          {waitlistLoading ? (
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-10 text-center animate-pulse">
+              <div className="mx-auto h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+              <div className="mx-auto mt-3 h-4 w-72 max-w-full bg-slate-200 dark:bg-slate-800 rounded-lg" />
+            </div>
+
+          ) : waitlist.length === 0 ? (
+
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-10 text-center">
+
+              <div className="text-4xl">
+                ⏳
+              </div>
+
+              <h3 className="mt-4 text-xl font-black">
+                No waitlist entries
+              </h3>
+
+              <p className="mt-2 text-slate-500">
+                You haven't joined any event waitlists.
+              </p>
+
+            </div>
+
+          ) : (
+
+            <div className="space-y-5">
+
+              {waitlist.map((entry) => {
+
+                const active =
+                  entry.status === "WAITING" ||
+                  entry.status === "OFFERED";
+
+                return (
+
+                  <article
+                    key={entry.id}
+                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6"
+                  >
+
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+
+                      <div>
+
+                        <p className="text-xs uppercase tracking-wider font-bold text-slate-400">
+                          Waitlist #{entry.id}
+                        </p>
+
+                        <h3 className="mt-2 text-xl font-black">
+                          {entry.eventTitle}
+                        </h3>
+
+                        <div className="mt-3 flex flex-wrap gap-3">
+
+                          <span className="px-3 py-1.5 rounded-lg bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 text-sm font-bold">
+                            {entry.category}
+                          </span>
+
+                          <span className="px-3 py-1.5 rounded-lg bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 text-sm font-bold">
+                            Position #{entry.position}
+                          </span>
+
+                          <span
+                            className={`px-3 py-1.5 rounded-lg text-sm font-bold ${
+                              entry.status === "WAITING"
+                                ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400"
+                                : entry.status === "OFFERED"
+                                ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400"
+                                : "bg-slate-100 dark:bg-slate-800 text-slate-500"
+                            }`}
+                          >
+                            {entry.status}
+                          </span>
+
+                        </div>
+
+                        {entry.status === "OFFERED" &&
+                          entry.offerExpiresAt && (
+                          <p className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                            🎟️ A seat has been offered to you.
+                            Offer expires at{" "}
+                            {new Date(
+                              entry.offerExpiresAt
+                            ).toLocaleString("en-IN")}
+                          </p>
+                        )}
+
+                        {entry.offeredSeat && (
+                          <p className="mt-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
+                            Offered seat: {entry.offeredSeat.seatNumber}
+                          </p>
+                        )}
+
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            navigate(
+                              `/events/${entry.eventId}`
+                            )
+                          }
+                          className="px-5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition"
+                        >
+                          View Event
+                        </button>
+
+                        {active && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleCancelWaitlist(
+                                entry.id
+                              )
+                            }
+                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition"
+                          >
+                            Leave Waitlist
+                          </button>
+                        )}
+
+                      </div>
+
+                    </div>
+
+                  </article>
+                );
+              })}
+
+            </div>
+          )}
+
+        </section>
 
       </main>
 

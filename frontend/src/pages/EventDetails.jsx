@@ -31,6 +31,14 @@ export default function EventDetails() {
   const [holdLoading, setHoldLoading] = useState(false);
 
   // =========================================================
+  // WAITLIST STATE
+  // =========================================================
+
+  const [waitlistLoading, setWaitlistLoading] = useState(false);
+  const [waitlistCategory, setWaitlistCategory] = useState(null);
+  const [waitlistMessage, setWaitlistMessage] = useState("");
+
+  // =========================================================
   // FETCH EVENT + SEATS
   // =========================================================
 
@@ -619,6 +627,53 @@ export default function EventDetails() {
         );
       }
     };
+
+  // =========================================================
+  // JOIN WAITLIST
+  // =========================================================
+
+  const joinWaitlist = async (category) => {
+
+    if (!user) {
+      navigate("/login");
+      return;
+    }
+
+    setWaitlistLoading(true);
+    setWaitlistCategory(category);
+    setWaitlistMessage("");
+
+    try {
+
+      const response = await api.post(
+        `/api/waitlist/events/${id}`,
+        {
+          category
+        }
+      );
+
+      setWaitlistMessage(
+        `Joined the ${category.toLowerCase()} waitlist successfully. Your position is #${response.data.position}.`
+      );
+
+    } catch (err) {
+
+      console.error(
+        "Waitlist join failed:",
+        err
+      );
+
+      setWaitlistMessage(
+        err.response?.data?.error ||
+        "Unable to join the waitlist."
+      );
+
+    } finally {
+
+      setWaitlistLoading(false);
+
+    }
+  };
 
   // =========================================================
   // LOADING
@@ -1340,12 +1395,49 @@ export default function EventDetails() {
 
               {event.availableSeats === 0 ? (
 
-                <button
-                  disabled
-                  className="w-full mt-7 py-4 rounded-2xl bg-slate-200 dark:bg-slate-800 text-slate-500 font-bold"
-                >
-                  Sold Out
-                </button>
+                <div className="mt-7 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-5">
+
+                  <p className="text-sm font-bold text-amber-700 dark:text-amber-400">
+                    🎟️ This event is currently sold out
+                  </p>
+
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-300">
+                    Join a waitlist and we'll notify you when seats become available.
+                  </p>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-5">
+
+                    <button
+                      type="button"
+                      disabled={waitlistLoading}
+                      onClick={() => joinWaitlist("PREMIUM")}
+                      className="py-3 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {waitlistLoading && waitlistCategory === "PREMIUM"
+                        ? "Joining..."
+                        : "Premium Waitlist"}
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={waitlistLoading}
+                      onClick={() => joinWaitlist("STANDARD")}
+                      className="py-3 rounded-xl bg-slate-700 text-white font-bold hover:bg-slate-800 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {waitlistLoading && waitlistCategory === "STANDARD"
+                        ? "Joining..."
+                        : "Standard Waitlist"}
+                    </button>
+
+                  </div>
+
+                  {waitlistMessage && (
+                    <div className="mt-4 rounded-xl bg-white/70 dark:bg-slate-900/60 p-3 text-center text-sm font-semibold text-slate-700 dark:text-slate-300">
+                      {waitlistMessage}
+                    </div>
+                  )}
+
+                </div>
 
               ) : (
 
