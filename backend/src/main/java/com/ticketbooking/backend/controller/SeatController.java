@@ -9,6 +9,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -68,6 +69,63 @@ public class SeatController {
     }
 
     // =========================================================
+    // HOLD SEATS
+    // =========================================================
+
+    @PostMapping("/{eventId}/seats/hold")
+    public ResponseEntity<?> holdSeats(
+            @PathVariable Long eventId,
+            @RequestBody HoldSeatsRequest request,
+            Authentication authentication) {
+
+        if (authentication == null ||
+                !authentication.isAuthenticated()) {
+
+            return ResponseEntity
+                    .status(HttpStatus.UNAUTHORIZED)
+                    .body(Map.of(
+                            "error",
+                            "Authentication required"
+                    ));
+        }
+
+        try {
+
+            List<Seat> seats =
+                    seatService.holdSeats(
+                            eventId,
+                            request.seatIds(),
+                            authentication.getName()
+                    );
+
+            return ResponseEntity.ok(
+                    Map.of(
+                            "message",
+                            "Seats held successfully",
+
+                            "expiresAt",
+                            seats.get(0)
+                                    .getHoldExpiresAt(),
+
+                            "seats",
+                            seats.stream()
+                                    .map(this::toResponse)
+                                    .toList()
+                    )
+            );
+
+        } catch (RuntimeException e) {
+
+            return ResponseEntity
+                    .status(HttpStatus.CONFLICT)
+                    .body(Map.of(
+                            "error",
+                            e.getMessage()
+                    ));
+        }
+    }
+
+    // =========================================================
     // GENERATE SEATS
     // =========================================================
 
@@ -93,10 +151,6 @@ public class SeatController {
                             authentication.getName()
                     );
 
-            // -------------------------------------------------
-            // Only ADMIN or ORGANISER can generate seats
-            // -------------------------------------------------
-
             if (user.getRole() != User.Role.ADMIN &&
                     user.getRole() != User.Role.ORGANISER) {
 
@@ -108,20 +162,12 @@ public class SeatController {
                         ));
             }
 
-            // -------------------------------------------------
-            // Find event
-            // -------------------------------------------------
-
             Event event =
                     eventRepository.findById(eventId)
                             .orElseThrow(() ->
                                     new RuntimeException(
                                             "Event not found"
                                     ));
-
-            // -------------------------------------------------
-            // Only event organiser or ADMIN
-            // -------------------------------------------------
 
             if (user.getRole() != User.Role.ADMIN &&
                     !event.getOrganiser()
@@ -135,10 +181,6 @@ public class SeatController {
                                 "You do not have permission to generate seats for this event"
                         ));
             }
-
-            // -------------------------------------------------
-            // Generate seats
-            // -------------------------------------------------
 
             List<Seat> seats =
                     seatService.generateSeats(
@@ -172,18 +214,47 @@ public class SeatController {
     private Map<String, Object> toResponse(
             Seat seat) {
 
-        return Map.of(
+        Map<String, Object> response =
+                new java.util.HashMap<>();
+
+        response.put(
                 "id",
-                seat.getId(),
+                seat.getId()
+        );
 
+        response.put(
                 "seatNumber",
-                seat.getSeatNumber(),
+                seat.getSeatNumber()
+        );
 
+        response.put(
                 "category",
-                seat.getCategory().name(),
+                seat.getCategory().name()
+        );
 
+        response.put(
                 "status",
                 seat.getStatus().name()
         );
+
+        response.put(
+                "heldByUserId",
+                seat.getHeldByUserId()
+        );
+
+        response.put(
+                "holdExpiresAt",
+                seat.getHoldExpiresAt()
+        );
+
+        return response;
     }
+
+    // =========================================================
+    // REQUEST
+    // =========================================================
+
+    public record HoldSeatsRequest(
+            List<Long> seatIds
+    ) {}
 }
