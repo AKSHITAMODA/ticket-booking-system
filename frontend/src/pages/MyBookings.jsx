@@ -19,8 +19,13 @@ export default function MyBookings() {
   const [waitlistLoading, setWaitlistLoading] = useState(true);
   const [waitlistError, setWaitlistError] = useState("");
 
-  useEffect(() => {
+  const [payingWaitlistId, setPayingWaitlistId] = useState(null);
 
+  // =========================================================
+  // LOAD BOOKINGS + WAITLIST
+  // =========================================================
+
+  useEffect(() => {
     if (authLoading) return;
 
     if (!user) {
@@ -29,9 +34,7 @@ export default function MyBookings() {
     }
 
     const fetchData = async () => {
-
       try {
-
         const [
           bookingsResponse,
           waitlistResponse
@@ -44,7 +47,6 @@ export default function MyBookings() {
         setWaitlist(waitlistResponse.data);
 
       } catch (err) {
-
         console.error(
           "Failed to load bookings/waitlist:",
           err
@@ -61,10 +63,8 @@ export default function MyBookings() {
         );
 
       } finally {
-
         setLoading(false);
         setWaitlistLoading(false);
-
       }
     };
 
@@ -72,7 +72,9 @@ export default function MyBookings() {
 
   }, [user, authLoading, navigate]);
 
-  // ================= CANCEL =================
+  // =========================================================
+  // CANCEL BOOKING
+  // =========================================================
 
   const handleCancel = async (bookingId) => {
     const confirmed = window.confirm(
@@ -103,24 +105,27 @@ export default function MyBookings() {
 
       setMessage(
         response.data?.message ||
-          "Booking cancelled successfully."
+        "Booking cancelled successfully."
       );
+
     } catch (err) {
       console.error("Cancellation error:", err);
 
       setError(
         err.response?.data?.error ||
-          "Unable to cancel booking."
+        "Unable to cancel booking."
       );
+
     } finally {
       setCancellingId(null);
     }
   };
 
-  // ================= CANCEL WAITLIST =================
+  // =========================================================
+  // CANCEL WAITLIST
+  // =========================================================
 
   const handleCancelWaitlist = async (entryId) => {
-
     const confirmed = window.confirm(
       "Are you sure you want to leave this waitlist?"
     );
@@ -128,7 +133,6 @@ export default function MyBookings() {
     if (!confirmed) return;
 
     try {
-
       await api.delete(
         `/api/waitlist/${entryId}`
       );
@@ -138,7 +142,8 @@ export default function MyBookings() {
           entry.id === entryId
             ? {
                 ...entry,
-                status: "CANCELLED"
+                status: "CANCELLED",
+                offeredSeat: null,
               }
             : entry
         )
@@ -149,7 +154,6 @@ export default function MyBookings() {
       );
 
     } catch (err) {
-
       console.error(
         "Waitlist cancellation error:",
         err
@@ -162,8 +166,240 @@ export default function MyBookings() {
     }
   };
 
-  // ================= AUTH LOADING =================
+  // =========================================================
+  // ACCEPT WAITLIST OFFER + PAYMENT
+  // =========================================================
 
+  const handleWaitlistPayment = async (entry) => {
+    if (!entry || entry.status !== "OFFERED") {
+      return;
+    }
+
+    if (!entry.offeredSeat) {
+      setError(
+        "No seat has been offered for this waitlist entry."
+      );
+      return;
+    }
+
+    setPayingWaitlistId(entry.id);
+    setMessage("");
+    setError("");
+
+    try {
+      // -----------------------------------------------------
+      // STEP 1: Accept the offered seat
+      // -----------------------------------------------------
+
+      const acceptResponse =
+        await api.post(
+          `/api/payments/waitlist/${entry.id}/accept`
+        );
+
+      const accepted =
+        acceptResponse.data;
+
+      const eventId =
+        accepted.eventId ||
+        entry.eventId;
+
+      const seatId =
+        accepted.seatId ||
+        entry.offeredSeat.id;
+
+      if (!eventId || !seatId) {
+        throw new Error(
+          "Invalid offered seat information."
+        );
+      }
+
+      // -----------------------------------------------------
+      // STEP 2: Create Razorpay payment order
+      // -----------------------------------------------------
+
+      const orderResponse =
+        await api.post(
+          "/api/payments/create-order",
+          {
+            eventId,
+            seatIds: [seatId],
+          }
+        );
+
+      const order =
+        orderResponse.data;
+
+      if (!order?.orderId) {
+        throw new Error(
+          "Unable to create payment order."
+        );
+      }
+
+      // -----------------------------------------------------
+      // STEP 3: Make sure Razorpay is available
+      // -----------------------------------------------------
+
+      if (!window.Razorpay) {
+        throw new Error(
+          "Razorpay checkout is not available. Please refresh the page and try again."
+        );
+      }
+
+      // -----------------------------------------------------
+      // STEP 4: Open Razorpay
+      // -----------------------------------------------------
+
+      const options = {
+        key: order.key,
+        amount: order.amount,
+        currency: order.currency || "INR",
+        name: "Ticketly",
+        description:
+          entry.eventTitle ||
+          "Ticket Booking",
+
+        order_id: order.orderId,
+
+        handler: async function (response) {
+          try {
+            // -----------------------------------------------
+            // STEP 5: Verify payment
+            // -----------------------------------------------
+
+            const verifyResponse =
+              await api.post(
+                "/api/payments/verify",
+                {
+                  razorpayOrderId:
+                    response.razorpay_order_id,
+
+                  razorpayPaymentId:
+                    response.razorpay_payment_id,
+
+                  razorpaySignature:
+                    response.razorpay_signature,
+                }
+              );
+
+            // -----------------------------------------------
+            // STEP 6: Update UI
+            // -----------------------------------------------
+
+            setWaitlist((previous) =>
+              previous.map((item) =>
+                item.id === entry.id
+                  ? {
+                      ...item,
+                      status: "FULFILLED",
+                      offeredSeat: null,
+                      offerExpiresAt: null,
+                    }
+                  : item
+              )
+            );
+
+            setMessage(
+              verifyResponse.data?.message ||
+              "Payment successful. Your ticket has been booked."
+            );
+
+            // -----------------------------------------------
+            // STEP 7: Refresh bookings
+            // -----------------------------------------------
+
+            try {
+              const bookingsResponse =
+                await api.get(
+                  "/api/bookings/my"
+                );
+
+              setBookings(
+                bookingsResponse.data
+              );
+            } catch (refreshError) {
+              console.error(
+                "Unable to refresh bookings:",
+                refreshError
+              );
+            }
+
+          } catch (verifyError) {
+            console.error(
+              "Payment verification error:",
+              verifyError
+            );
+
+            setError(
+              verifyError.response?.data?.error ||
+              verifyError.message ||
+              "Payment verification failed."
+            );
+          } finally {
+            setPayingWaitlistId(null);
+          }
+        },
+
+        prefill: {
+          name: user?.name || "",
+          email: user?.email || "",
+        },
+
+        theme: {
+          color: "#4f46e5",
+        },
+
+        modal: {
+          ondismiss: function () {
+            setPayingWaitlistId(null);
+
+            setMessage(
+              "Payment window closed. Your offered seat is still held until the offer expires."
+            );
+          },
+        },
+      };
+
+      const razorpay =
+        new window.Razorpay(options);
+
+      razorpay.on(
+        "payment.failed",
+        function (response) {
+          console.error(
+            "Razorpay payment failed:",
+            response
+          );
+
+          setError(
+            response.error?.description ||
+            "Payment failed. Please try again."
+          );
+
+          setPayingWaitlistId(null);
+        }
+      );
+
+      razorpay.open();
+
+    } catch (err) {
+      console.error(
+        "Waitlist payment error:",
+        err
+      );
+
+      setError(
+        err.response?.data?.error ||
+        err.message ||
+        "Unable to start payment."
+      );
+
+      setPayingWaitlistId(null);
+    }
+  };
+
+  // =========================================================
+  // AUTH LOADING
+  // =========================================================
 
   if (authLoading) {
     return (
@@ -185,7 +421,9 @@ export default function MyBookings() {
     );
   }
 
-  // ================= PAGE LOADING =================
+  // =========================================================
+  // PAGE LOADING
+  // =========================================================
 
   if (loading) {
     return (
@@ -230,23 +468,35 @@ export default function MyBookings() {
     );
   }
 
-  // ================= STATS =================
+  // =========================================================
+  // STATS
+  // =========================================================
 
-  const confirmedBookings = bookings.filter(
-    (booking) => booking.status === "CONFIRMED"
-  ).length;
+  const confirmedBookings =
+    bookings.filter(
+      (booking) =>
+        booking.status === "CONFIRMED"
+    ).length;
 
-  const cancelledBookings = bookings.filter(
-    (booking) => booking.status === "CANCELLED"
-  ).length;
+  const cancelledBookings =
+    bookings.filter(
+      (booking) =>
+        booking.status === "CANCELLED"
+    ).length;
 
-  const totalTickets = bookings.reduce(
-    (total, booking) =>
-      total + Number(booking.numberOfSeats || 0),
-    0
-  );
+  const totalTickets =
+    bookings.reduce(
+      (total, booking) =>
+        total +
+        Number(
+          booking.numberOfSeats || 0
+        ),
+      0
+    );
 
-  // ================= PAGE =================
+  // =========================================================
+  // PAGE
+  // =========================================================
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white transition-colors duration-300">
@@ -279,7 +529,6 @@ export default function MyBookings() {
         </div>
 
       </section>
-
 
       {/* ================= CONTENT ================= */}
 
@@ -315,7 +564,6 @@ export default function MyBookings() {
 
           </div>
 
-
           {/* CONFIRMED */}
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm transition-colors">
@@ -341,7 +589,6 @@ export default function MyBookings() {
             </div>
 
           </div>
-
 
           {/* TICKETS */}
 
@@ -371,7 +618,6 @@ export default function MyBookings() {
 
         </div>
 
-
         {/* ================= MESSAGE ================= */}
 
         {message && (
@@ -386,7 +632,6 @@ export default function MyBookings() {
           </div>
         )}
 
-
         {/* ================= ERROR ================= */}
 
         {error && (
@@ -398,7 +643,6 @@ export default function MyBookings() {
 
           </div>
         )}
-
 
         {/* ================= EMPTY ================= */}
 
@@ -455,7 +699,6 @@ export default function MyBookings() {
 
             </div>
 
-
             <div className="space-y-6">
 
               {bookings.map((booking) => {
@@ -463,9 +706,10 @@ export default function MyBookings() {
                 const isConfirmed =
                   booking.status === "CONFIRMED";
 
-                const eventDate = new Date(
-                  booking.event.eventDate
-                );
+                const eventDate =
+                  new Date(
+                    booking.event.eventDate
+                  );
 
                 return (
 
@@ -518,7 +762,6 @@ export default function MyBookings() {
 
                     </div>
 
-
                     {/* ================= DETAILS ================= */}
 
                     <div className="p-6 md:p-8">
@@ -543,7 +786,6 @@ export default function MyBookings() {
 
                         </div>
 
-
                         {/* DATE */}
 
                         <div className="rounded-2xl bg-slate-50 dark:bg-slate-800/70 border border-slate-100 dark:border-slate-700 p-5 transition-colors">
@@ -557,6 +799,7 @@ export default function MyBookings() {
                           </p>
 
                           <p className="mt-1 font-bold text-slate-900 dark:text-white">
+
                             {eventDate.toLocaleDateString(
                               "en-IN",
                               {
@@ -565,10 +808,10 @@ export default function MyBookings() {
                                 year: "numeric",
                               }
                             )}
+
                           </p>
 
                         </div>
-
 
                         {/* TICKETS */}
 
@@ -583,14 +826,15 @@ export default function MyBookings() {
                           </p>
 
                           <p className="mt-1 font-bold text-slate-900 dark:text-white">
+
                             {booking.numberOfSeats}{" "}
                             {booking.numberOfSeats === 1
                               ? "ticket"
                               : "tickets"}
+
                           </p>
 
                         </div>
-
 
                         {/* AMOUNT */}
 
@@ -605,15 +849,17 @@ export default function MyBookings() {
                           </p>
 
                           <p className="mt-1 font-black text-slate-900 dark:text-white">
-                            ₹{Number(
+
+                            ₹
+                            {Number(
                               booking.totalAmount
                             ).toFixed(2)}
+
                           </p>
 
                         </div>
 
                       </div>
-
 
                       {/* ================= FOOTER ================= */}
 
@@ -626,13 +872,14 @@ export default function MyBookings() {
                           </p>
 
                           <p className="mt-1 text-sm font-semibold text-slate-700 dark:text-slate-300">
+
                             {new Date(
                               booking.createdAt
                             ).toLocaleString("en-IN")}
+
                           </p>
 
                         </div>
-
 
                         <div className="flex flex-wrap gap-3">
 
@@ -646,7 +893,6 @@ export default function MyBookings() {
                           >
                             View Event
                           </button>
-
 
                           {isConfirmed && (
                             <button
@@ -692,6 +938,7 @@ export default function MyBookings() {
           <div className="flex items-end justify-between mb-6">
 
             <div>
+
               <p className="text-sm font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
                 Waitlist
               </p>
@@ -699,14 +946,19 @@ export default function MyBookings() {
               <h2 className="mt-1 text-2xl font-black">
                 Your waitlists
               </h2>
+
             </div>
 
             <span className="px-3 py-1 rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 text-sm font-bold">
-              {waitlist.filter(
-                (entry) =>
-                  entry.status === "WAITING" ||
-                  entry.status === "OFFERED"
-              ).length} active
+
+              {
+                waitlist.filter(
+                  (entry) =>
+                    entry.status === "WAITING" ||
+                    entry.status === "OFFERED"
+                ).length
+              } active
+
             </span>
 
           </div>
@@ -720,8 +972,11 @@ export default function MyBookings() {
           {waitlistLoading ? (
 
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-10 text-center animate-pulse">
+
               <div className="mx-auto h-6 w-48 bg-slate-200 dark:bg-slate-800 rounded-lg" />
+
               <div className="mx-auto mt-3 h-4 w-72 max-w-full bg-slate-200 dark:bg-slate-800 rounded-lg" />
+
             </div>
 
           ) : waitlist.length === 0 ? (
@@ -752,11 +1007,21 @@ export default function MyBookings() {
                   entry.status === "WAITING" ||
                   entry.status === "OFFERED";
 
+                const isOffered =
+                  entry.status === "OFFERED";
+
+                const isPaying =
+                  payingWaitlistId === entry.id;
+
                 return (
 
                   <article
                     key={entry.id}
-                    className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm p-6"
+                    className={`bg-white dark:bg-slate-900 rounded-3xl border shadow-sm p-6 ${
+                      isOffered
+                        ? "border-emerald-300 dark:border-emerald-800 ring-1 ring-emerald-200 dark:ring-emerald-900"
+                        : "border-slate-200 dark:border-slate-800"
+                    }`}
                   >
 
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
@@ -787,6 +1052,8 @@ export default function MyBookings() {
                                 ? "bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-400"
                                 : entry.status === "OFFERED"
                                 ? "bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400"
+                                : entry.status === "FULFILLED"
+                                ? "bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-400"
                                 : "bg-slate-100 dark:bg-slate-800 text-slate-500"
                             }`}
                           >
@@ -795,24 +1062,49 @@ export default function MyBookings() {
 
                         </div>
 
-                        {entry.status === "OFFERED" &&
+                        {/* OFFER MESSAGE */}
+
+                        {isOffered &&
                           entry.offerExpiresAt && (
-                          <p className="mt-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
-                            🎟️ A seat has been offered to you.
-                            Offer expires at{" "}
-                            {new Date(
-                              entry.offerExpiresAt
-                            ).toLocaleString("en-IN")}
-                          </p>
-                        )}
+                            <div className="mt-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900 p-4">
+
+                              <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">
+                                🎟️ A seat has been offered to you!
+                              </p>
+
+                              <p className="mt-1 text-sm text-emerald-600 dark:text-emerald-500">
+                                Complete payment before the offer expires.
+                              </p>
+
+                              <p className="mt-2 text-xs font-semibold text-emerald-600 dark:text-emerald-500">
+                                Offer expires at{" "}
+                                {new Date(
+                                  entry.offerExpiresAt
+                                ).toLocaleString("en-IN")}
+                              </p>
+
+                            </div>
+                          )}
+
+                        {/* OFFERED SEAT */}
 
                         {entry.offeredSeat && (
-                          <p className="mt-3 text-sm font-semibold text-indigo-600 dark:text-indigo-400">
-                            Offered seat: {entry.offeredSeat.seatNumber}
-                          </p>
+                          <div className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-900">
+
+                            <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">
+                              🎫 Offered seat:
+                            </span>
+
+                            <span className="text-sm font-black text-indigo-700 dark:text-indigo-300">
+                              {entry.offeredSeat.seatNumber}
+                            </span>
+
+                          </div>
                         )}
 
                       </div>
+
+                      {/* ================= ACTIONS ================= */}
 
                       <div className="flex flex-wrap gap-3">
 
@@ -828,6 +1120,31 @@ export default function MyBookings() {
                           View Event
                         </button>
 
+                        {/* ACCEPT & PAY */}
+
+                        {isOffered && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleWaitlistPayment(
+                                entry
+                              )
+                            }
+                            disabled={
+                              isPaying
+                            }
+                            className="px-5 py-2.5 rounded-xl bg-emerald-600 text-white font-bold hover:bg-emerald-700 transition disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-emerald-200 dark:shadow-emerald-950/30"
+                          >
+
+                            {isPaying
+                              ? "Opening Payment..."
+                              : "Accept & Pay"}
+
+                          </button>
+                        )}
+
+                        {/* LEAVE WAITLIST */}
+
                         {active && (
                           <button
                             type="button"
@@ -836,7 +1153,8 @@ export default function MyBookings() {
                                 entry.id
                               )
                             }
-                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition"
+                            disabled={isPaying}
+                            className="px-5 py-2.5 rounded-xl bg-red-600 text-white font-bold hover:bg-red-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             Leave Waitlist
                           </button>
@@ -851,6 +1169,7 @@ export default function MyBookings() {
               })}
 
             </div>
+
           )}
 
         </section>
