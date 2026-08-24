@@ -24,17 +24,20 @@ public class BookingService {
     private final EventRepository eventRepository;
     private final SeatRepository seatRepository;
     private final UserService userService;
+    private final WaitlistService waitlistService;
 
     public BookingService(
             BookingRepository bookingRepository,
             EventRepository eventRepository,
             SeatRepository seatRepository,
-            UserService userService) {
+            UserService userService,
+            WaitlistService waitlistService) {
 
         this.bookingRepository = bookingRepository;
         this.eventRepository = eventRepository;
         this.seatRepository = seatRepository;
         this.userService = userService;
+        this.waitlistService = waitlistService;
     }
 
     // =========================================================
@@ -409,6 +412,7 @@ public class BookingService {
             seat.setHoldExpiresAt(null);
 
             seatRepository.save(seat);
+            waitlistService.handleAvailableSeat(seat);
         }
 
         // -----------------------------------------------------
