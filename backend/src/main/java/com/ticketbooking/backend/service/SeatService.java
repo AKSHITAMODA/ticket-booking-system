@@ -23,9 +23,13 @@ public class SeatService {
     private final UserService userService;
 
     /*
-     * Configurable hold duration.
+     * Configurable seat-hold duration.
      *
-     * Default = 10 minutes.
+     * application.properties:
+     *
+     * app.seat.hold-minutes=10
+     *
+     * If the property is missing, 10 minutes is used.
      */
     @Value("${app.seat.hold-minutes:10}")
     private long holdMinutes;
@@ -41,7 +45,7 @@ public class SeatService {
     }
 
     // =========================================================
-    // GET SEAT MAP
+    // GET EVENT SEATS
     // =========================================================
 
     @Transactional(readOnly = true)
@@ -92,6 +96,10 @@ public class SeatService {
             );
         }
 
+        /*
+         * First 20% = PREMIUM
+         * Remaining 80% = STANDARD
+         */
         int premiumSeats =
                 Math.max(
                         1,
@@ -118,6 +126,9 @@ public class SeatService {
                     Seat.Status.AVAILABLE
             );
 
+            /*
+             * New seats are never held.
+             */
             seat.setHeldByUserId(null);
             seat.setHoldExpiresAt(null);
 
@@ -138,6 +149,10 @@ public class SeatService {
             List<Long> seatIds,
             String userEmail) {
 
+        // -----------------------------------------------------
+        // Validate request
+        // -----------------------------------------------------
+
         if (seatIds == null || seatIds.isEmpty()) {
 
             throw new RuntimeException(
@@ -155,9 +170,10 @@ public class SeatService {
                                         "Event not found"
                                 ));
 
-        /*
-         * Remove duplicate seat IDs.
-         */
+        // -----------------------------------------------------
+        // Remove duplicate seat IDs
+        // -----------------------------------------------------
+
         List<Long> uniqueSeatIds =
                 new ArrayList<>(
                         seatIds.stream()
@@ -166,10 +182,15 @@ public class SeatService {
                 );
 
         /*
-         * Always acquire locks in a predictable order.
+         * Always acquire locks in the same order.
          *
-         * This reduces the possibility of deadlocks
-         * when two users select multiple seats.
+         * Example:
+         *
+         * User A -> [1,2]
+         * User B -> [2,1]
+         *
+         * Sorting both requests to [1,2]
+         * reduces deadlock risk.
          */
         uniqueSeatIds.sort(Long::compareTo);
 
@@ -179,10 +200,10 @@ public class SeatService {
         LocalDateTime now =
                 LocalDateTime.now();
 
-        /*
-         * Lock every requested seat before
-         * checking or changing its status.
-         */
+        // -----------------------------------------------------
+        // Lock and validate every requested seat
+        // -----------------------------------------------------
+
         for (Long seatId : uniqueSeatIds) {
 
             Seat seat =
@@ -194,24 +215,25 @@ public class SeatService {
                                                     + seatId
                                     ));
 
-            /*
-             * Make sure the seat belongs to
-             * the requested event.
-             */
+            // -------------------------------------------------
+            // Make sure seat belongs to this event
+            // -------------------------------------------------
+
             if (!seat.getEvent()
                     .getId()
                     .equals(event.getId())) {
 
                 throw new RuntimeException(
-                        "Seat " + seatId +
+                        "Seat " +
+                        seatId +
                         " does not belong to this event"
                 );
             }
 
-            /*
-             * If an old hold has expired,
-             * release it immediately.
-             */
+            // -------------------------------------------------
+            // Release expired hold immediately
+            // -------------------------------------------------
+
             if (seat.getStatus() == Seat.Status.HELD &&
                     seat.getHoldExpiresAt() != null &&
                     !seat.getHoldExpiresAt().isAfter(now)) {
@@ -227,16 +249,16 @@ public class SeatService {
                 seatRepository.save(seat);
             }
 
-            /*
-             * Only AVAILABLE seats can be held.
-             */
+            // -------------------------------------------------
+            // Seat must be AVAILABLE
+            // -------------------------------------------------
+
             if (seat.getStatus() !=
                     Seat.Status.AVAILABLE) {
 
                 /*
-                 * If the seat is held by the
-                 * same user, allow them to keep
-                 * using their existing hold.
+                 * Do NOT allow the same user to repeatedly
+                 * re-hold the seat and reset its timer.
                  */
                 if (seat.getStatus() ==
                         Seat.Status.HELD &&
@@ -245,11 +267,16 @@ public class SeatService {
                                         seat.getHeldByUserId()
                                 )) {
 
-                    lockedSeats.add(seat);
-
-                    continue;
+                    throw new RuntimeException(
+                            "Seat " +
+                            seat.getSeatNumber() +
+                            " is already held by you"
+                    );
                 }
 
+                /*
+                 * BOOKED or HELD by another user.
+                 */
                 throw new RuntimeException(
                         "Seat " +
                         seat.getSeatNumber() +
@@ -260,12 +287,17 @@ public class SeatService {
             lockedSeats.add(seat);
         }
 
+        // -----------------------------------------------------
+        // Calculate hold expiry
+        // -----------------------------------------------------
+
         LocalDateTime expiresAt =
                 now.plusMinutes(holdMinutes);
 
-        /*
-         * Apply the hold to every seat.
-         */
+        // -----------------------------------------------------
+        // Apply hold
+        // -----------------------------------------------------
+
         for (Seat seat : lockedSeats) {
 
             seat.setStatus(
@@ -290,6 +322,14 @@ public class SeatService {
     // RELEASE EXPIRED HOLDS
     // =========================================================
 
+    /*
+     * Runs every 30 seconds.
+     *
+     * This is the background safety mechanism.
+     *
+     * Expired seats are also checked when somebody attempts
+     * to hold them, so we don't depend exclusively on this job.
+     */
     @Scheduled(fixedDelay = 30000)
     @Transactional
     public void releaseExpiredHolds() {

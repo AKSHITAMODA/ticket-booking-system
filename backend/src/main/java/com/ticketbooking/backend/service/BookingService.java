@@ -1,6 +1,7 @@
 package com.ticketbooking.backend.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -37,7 +38,7 @@ public class BookingService {
     }
 
     // =========================================================
-    // CREATE BOOKING
+    // CREATE BOOKING FROM HELD SEATS
     // =========================================================
 
     @Transactional
@@ -51,13 +52,15 @@ public class BookingService {
         // -----------------------------------------------------
 
         if (seatIds == null || seatIds.isEmpty()) {
+
             throw new RuntimeException(
                     "At least one seat must be selected"
             );
         }
 
-        // Prevent duplicate seat IDs in request
-        if (seatIds.size() != seatIds.stream().distinct().count()) {
+        if (seatIds.size() !=
+                seatIds.stream().distinct().count()) {
+
             throw new RuntimeException(
                     "Duplicate seats are not allowed"
             );
@@ -82,32 +85,43 @@ public class BookingService {
                                 ));
 
         // -----------------------------------------------------
-        // Validate requested number of seats
-        // -----------------------------------------------------
-
-        if (seatIds.size() > event.getAvailableSeats()) {
-            throw new RuntimeException(
-                    "Not enough seats available"
-            );
-        }
-
-        // -----------------------------------------------------
         // Lock and validate every selected seat
         // -----------------------------------------------------
 
-        List<Seat> selectedSeats = new ArrayList<>();
+        List<Seat> selectedSeats =
+                new ArrayList<>();
 
-        for (Long seatId : seatIds) {
+        LocalDateTime now =
+                LocalDateTime.now();
+
+        /*
+         * Sort IDs before acquiring locks.
+         *
+         * This reduces deadlock risk when multiple users
+         * are booking multiple seats simultaneously.
+         */
+        List<Long> sortedSeatIds =
+                new ArrayList<>(seatIds);
+
+        sortedSeatIds.sort(Long::compareTo);
+
+        for (Long seatId : sortedSeatIds) {
 
             Seat seat =
-                    seatRepository.findByIdForUpdate(seatId)
+                    seatRepository
+                            .findByIdForUpdate(seatId)
                             .orElseThrow(() ->
                                     new RuntimeException(
-                                            "Seat not found: " + seatId
+                                            "Seat not found: "
+                                                    + seatId
                                     ));
 
-            // Make sure seat belongs to this event
-            if (!seat.getEvent().getId()
+            // -------------------------------------------------
+            // Make sure seat belongs to event
+            // -------------------------------------------------
+
+            if (!seat.getEvent()
+                    .getId()
                     .equals(event.getId())) {
 
                 throw new RuntimeException(
@@ -117,17 +131,72 @@ public class BookingService {
                 );
             }
 
-            // Make sure seat is available
-            if (seat.getStatus() != Seat.Status.AVAILABLE) {
+            // -------------------------------------------------
+            // Seat must be HELD by this user
+            // -------------------------------------------------
+
+            if (seat.getStatus() !=
+                    Seat.Status.HELD) {
 
                 throw new RuntimeException(
                         "Seat " +
                         seat.getSeatNumber() +
-                        " is already booked"
+                        " is not currently held"
+                );
+            }
+
+            if (seat.getHeldByUserId() == null ||
+                    !seat.getHeldByUserId()
+                            .equals(user.getId())) {
+
+                throw new RuntimeException(
+                        "Seat " +
+                        seat.getSeatNumber() +
+                        " is held by another user"
+                );
+            }
+
+            // -------------------------------------------------
+            // Check hold expiry
+            // -------------------------------------------------
+
+            if (seat.getHoldExpiresAt() == null ||
+                    !seat.getHoldExpiresAt()
+                            .isAfter(now)) {
+
+                /*
+                 * Release the expired hold.
+                 */
+                seat.setStatus(
+                        Seat.Status.AVAILABLE
+                );
+
+                seat.setHeldByUserId(null);
+
+                seat.setHoldExpiresAt(null);
+
+                seatRepository.save(seat);
+
+                throw new RuntimeException(
+                        "Seat " +
+                        seat.getSeatNumber() +
+                        " hold has expired"
                 );
             }
 
             selectedSeats.add(seat);
+        }
+
+        // -----------------------------------------------------
+        // Validate event availability
+        // -----------------------------------------------------
+
+        if (selectedSeats.size() >
+                event.getAvailableSeats()) {
+
+            throw new RuntimeException(
+                    "Not enough seats available"
+            );
         }
 
         // -----------------------------------------------------
@@ -143,7 +212,7 @@ public class BookingService {
                         );
 
         // -----------------------------------------------------
-        // Mark seats as BOOKED
+        // Convert HELD → BOOKED
         // -----------------------------------------------------
 
         for (Seat seat : selectedSeats) {
@@ -151,6 +220,13 @@ public class BookingService {
             seat.setStatus(
                     Seat.Status.BOOKED
             );
+
+            /*
+             * Once booked, the temporary hold information
+             * is no longer required.
+             */
+            seat.setHeldByUserId(null);
+            seat.setHoldExpiresAt(null);
 
             seatRepository.save(seat);
         }
@@ -170,16 +246,20 @@ public class BookingService {
         // Create booking
         // -----------------------------------------------------
 
-        Booking booking = new Booking();
+        Booking booking =
+                new Booking();
 
         booking.setUser(user);
+
         booking.setEvent(event);
 
         booking.setNumberOfSeats(
                 selectedSeats.size()
         );
 
-        booking.setTotalAmount(totalAmount);
+        booking.setTotalAmount(
+                totalAmount
+        );
 
         booking.setStatus(
                 Booking.Status.CONFIRMED
@@ -205,7 +285,9 @@ public class BookingService {
         // Save booking
         // -----------------------------------------------------
 
-        return bookingRepository.save(booking);
+        return bookingRepository.save(
+                booking
+        );
     }
 
     // =========================================================
@@ -242,11 +324,9 @@ public class BookingService {
         User user =
                 userService.findByEmail(userEmail);
 
-        // Customer can only view their own booking.
-        // ADMIN can view any booking.
-
         if (user.getRole() != User.Role.ADMIN &&
-                !booking.getUser().getId()
+                !booking.getUser()
+                        .getId()
                         .equals(user.getId())) {
 
             throw new RuntimeException(
@@ -266,10 +346,6 @@ public class BookingService {
             Long bookingId,
             String userEmail) {
 
-        // -----------------------------------------------------
-        // Find booking
-        // -----------------------------------------------------
-
         Booking booking =
                 bookingRepository.findById(bookingId)
                         .orElseThrow(() ->
@@ -277,29 +353,18 @@ public class BookingService {
                                         "Booking not found"
                                 ));
 
-        // -----------------------------------------------------
-        // Find user
-        // -----------------------------------------------------
-
         User user =
                 userService.findByEmail(userEmail);
 
-        // -----------------------------------------------------
-        // Permission check
-        // -----------------------------------------------------
-
         if (user.getRole() != User.Role.ADMIN &&
-                !booking.getUser().getId()
+                !booking.getUser()
+                        .getId()
                         .equals(user.getId())) {
 
             throw new RuntimeException(
                     "You do not have permission to cancel this booking"
             );
         }
-
-        // -----------------------------------------------------
-        // Check already cancelled
-        // -----------------------------------------------------
 
         if (booking.getStatus() ==
                 Booking.Status.CANCELLED) {
@@ -308,10 +373,6 @@ public class BookingService {
                     "Booking is already cancelled"
             );
         }
-
-        // -----------------------------------------------------
-        // Lock event
-        // -----------------------------------------------------
 
         Event event =
                 eventRepository.findByIdForUpdate(
@@ -331,7 +392,9 @@ public class BookingService {
 
             Seat seat =
                     seatRepository.findByIdForUpdate(
-                            bookingSeat.getSeat().getId()
+                            bookingSeat
+                                    .getSeat()
+                                    .getId()
                     )
                     .orElseThrow(() ->
                             new RuntimeException(
@@ -341,6 +404,9 @@ public class BookingService {
             seat.setStatus(
                     Seat.Status.AVAILABLE
             );
+
+            seat.setHeldByUserId(null);
+            seat.setHoldExpiresAt(null);
 
             seatRepository.save(seat);
         }
@@ -364,7 +430,9 @@ public class BookingService {
                 Booking.Status.CANCELLED
         );
 
-        return bookingRepository.save(booking);
+        return bookingRepository.save(
+                booking
+        );
     }
 
     // =========================================================
@@ -386,10 +454,9 @@ public class BookingService {
         User user =
                 userService.findByEmail(userEmail);
 
-        // Only organiser or ADMIN
-
         if (user.getRole() != User.Role.ADMIN &&
-                !event.getOrganiser().getId()
+                !event.getOrganiser()
+                        .getId()
                         .equals(user.getId())) {
 
             throw new RuntimeException(

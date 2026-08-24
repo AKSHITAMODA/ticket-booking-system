@@ -1,6 +1,8 @@
 package com.ticketbooking.backend.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,7 +70,8 @@ public class PaymentService {
         // Validate seat selection
         // -----------------------------------------------------
 
-        if (seatIds == null || seatIds.isEmpty()) {
+        if (seatIds == null ||
+                seatIds.isEmpty()) {
 
             throw new RuntimeException(
                     "At least one seat must be selected"
@@ -76,7 +79,9 @@ public class PaymentService {
         }
 
         if (seatIds.size() !=
-                seatIds.stream().distinct().count()) {
+                seatIds.stream()
+                        .distinct()
+                        .count()) {
 
             throw new RuntimeException(
                     "Duplicate seats are not allowed"
@@ -98,20 +103,11 @@ public class PaymentService {
                                 ));
 
         // -----------------------------------------------------
-        // Validate availability
+        // Validate every held seat
         // -----------------------------------------------------
 
-        if (event.getAvailableSeats()
-                < seatIds.size()) {
-
-            throw new RuntimeException(
-                    "Not enough seats available"
-            );
-        }
-
-        // -----------------------------------------------------
-        // Validate every selected seat
-        // -----------------------------------------------------
+        LocalDateTime now =
+                LocalDateTime.now();
 
         for (Long seatId : seatIds) {
 
@@ -125,7 +121,12 @@ public class PaymentService {
                                             + seatId
                             ));
 
-            if (!seat.getEvent().getId()
+            // -------------------------------------------------
+            // Event validation
+            // -------------------------------------------------
+
+            if (!seat.getEvent()
+                    .getId()
                     .equals(event.getId())) {
 
                 throw new RuntimeException(
@@ -133,15 +134,74 @@ public class PaymentService {
                 );
             }
 
-            if (seat.getStatus()
-                    != Seat.Status.AVAILABLE) {
+            // -------------------------------------------------
+            // Seat must be HELD
+            // -------------------------------------------------
+
+            if (seat.getStatus() !=
+                    Seat.Status.HELD) {
 
                 throw new RuntimeException(
-                        "Seat "
-                                + seat.getSeatNumber()
-                                + " is already booked"
+                        "Seat " +
+                        seat.getSeatNumber() +
+                        " is not currently held"
                 );
             }
+
+            // -------------------------------------------------
+            // Must be held by current user
+            // -------------------------------------------------
+
+            if (seat.getHeldByUserId() == null ||
+                    !seat.getHeldByUserId()
+                            .equals(user.getId())) {
+
+                throw new RuntimeException(
+                        "Seat " +
+                        seat.getSeatNumber() +
+                        " is held by another user"
+                );
+            }
+
+            // -------------------------------------------------
+            // Check expiry
+            // -------------------------------------------------
+
+            if (seat.getHoldExpiresAt() == null ||
+                    !seat.getHoldExpiresAt()
+                            .isAfter(now)) {
+
+                /*
+                 * Release expired seat immediately.
+                 */
+                seat.setStatus(
+                        Seat.Status.AVAILABLE
+                );
+
+                seat.setHeldByUserId(null);
+
+                seat.setHoldExpiresAt(null);
+
+                seatRepository.save(seat);
+
+                throw new RuntimeException(
+                        "Seat " +
+                        seat.getSeatNumber() +
+                        " hold has expired"
+                );
+            }
+        }
+
+        // -----------------------------------------------------
+        // Validate event availability
+        // -----------------------------------------------------
+
+        if (event.getAvailableSeats() <
+                seatIds.size()) {
+
+            throw new RuntimeException(
+                    "Not enough seats available"
+            );
         }
 
         // -----------------------------------------------------
@@ -254,18 +314,11 @@ public class PaymentService {
                     numberOfSeats
             );
 
-            /*
-             * Store:
-             *
-             * [1,2,3]
-             */
             paymentOrder.setSeatIds(
                     seatIds.stream()
                             .map(String::valueOf)
                             .collect(
-                                    Collectors.joining(
-                                            ","
-                                    )
+                                    Collectors.joining(",")
                             )
             );
 
@@ -425,22 +478,39 @@ public class PaymentService {
             }
 
             // -------------------------------------------------
-            // Convert stored seat IDs back to List<Long>
+            // Convert stored seat IDs to List<Long>
             // -------------------------------------------------
+
+            if (paymentOrder.getSeatIds() == null ||
+                    paymentOrder.getSeatIds().isBlank()) {
+
+                throw new RuntimeException(
+                        "No seats associated with payment"
+                );
+            }
 
             List<Long> seatIds =
-                    java.util.Arrays
-                            .stream(
-                                    paymentOrder
-                                            .getSeatIds()
-                                            .split(",")
-                            )
-                            .map(String::trim)
-                            .map(Long::valueOf)
-                            .toList();
+                    Arrays.stream(
+                            paymentOrder
+                                    .getSeatIds()
+                                    .split(",")
+                    )
+                    .map(String::trim)
+                    .map(Long::valueOf)
+                    .toList();
 
             // -------------------------------------------------
-            // Create actual booking
+            // Create booking
+            //
+            // BookingService verifies:
+            //
+            // HELD
+            // +
+            // held by current user
+            // +
+            // hold not expired
+            //
+            // then converts HELD -> BOOKED.
             // -------------------------------------------------
 
             Booking booking =
@@ -448,9 +518,7 @@ public class PaymentService {
                             paymentOrder
                                     .getEvent()
                                     .getId(),
-
                             seatIds,
-
                             userEmail
                     );
 

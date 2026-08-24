@@ -41,19 +41,34 @@ public class Seat {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "seat_number", nullable = false)
+    @Column(
+        name = "seat_number",
+        nullable = false
+    )
     private String seatNumber;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(
+        nullable = false,
+        length = 20
+    )
     private Category category;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(
+        nullable = false,
+        length = 20
+    )
     private Status status;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "event_id", nullable = false)
+    @ManyToOne(
+        fetch = FetchType.LAZY,
+        optional = false
+    )
+    @JoinColumn(
+        name = "event_id",
+        nullable = false
+    )
     private Event event;
 
     // =========================================================
