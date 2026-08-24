@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -39,6 +38,12 @@ export default function EventDetails() {
   const [waitlistCategory, setWaitlistCategory] = useState(null);
   const [waitlistMessage, setWaitlistMessage] = useState("");
 
+  // Seat-map availability is the source of truth for the UI.
+  // event.availableSeats can become stale after a booking/hold transition.
+  const actualAvailableSeats = seats.filter(
+    (seat) => seat.status === "AVAILABLE"
+  ).length;
+
   // =========================================================
   // FETCH EVENT + SEATS
   // =========================================================
@@ -69,6 +74,28 @@ export default function EventDetails() {
 
   useEffect(() => {
     fetchEventAndSeats();
+  }, [id]);
+
+  // Browsers can restore this page from the back/forward cache after
+  // Razorpay redirects. Clear transient payment/hold state and refresh
+  // the real seat state so the button never stays stuck on "Opening Payment".
+  useEffect(() => {
+    const handlePageShow = () => {
+      setBooking(false);
+      setPaymentLoading(false);
+      setHoldLoading(false);
+      setHoldExpiresAt(null);
+      setRemainingSeconds(0);
+      setSelectedSeats([]);
+      setBookingMessage("");
+      fetchEventAndSeats();
+    };
+
+    window.addEventListener("pageshow", handlePageShow);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+    };
   }, [id]);
 
   // =========================================================
@@ -342,7 +369,7 @@ export default function EventDetails() {
       }
 
       if (
-        event.availableSeats <
+        actualAvailableSeats <
         selectedSeats.length
       ) {
         setBookingMessage(
@@ -497,10 +524,11 @@ export default function EventDetails() {
                 setEvent(
                   (previousEvent) => ({
                     ...previousEvent,
-
-                    availableSeats:
+                    availableSeats: Math.max(
+                      0,
                       previousEvent.availableSeats -
-                      selectedSeats.length,
+                        selectedSeats.length
+                    ),
                   })
                 );
 
@@ -521,8 +549,14 @@ export default function EventDetails() {
                 );
 
                 setSelectedSeats([]);
+                setBooking(false);
+                setPaymentLoading(false);
+                setHoldLoading(false);
 
-                // Redirect to My Bookings after successful payment verification
+                // Refresh the authoritative backend seat state before redirect.
+                await fetchEventAndSeats();
+
+                // Redirect to My Bookings after successful payment verification.
                 navigate("/my-bookings", { replace: true });
 
               } catch (err) {
@@ -1012,13 +1046,13 @@ export default function EventDetails() {
 
                   <p
                     className={`mt-1 font-bold ${
-                      event.availableSeats > 0
+                      actualAvailableSeats > 0
                         ? "text-emerald-600"
                         : "text-red-500"
                     }`}
                   >
-                    {event.availableSeats > 0
-                      ? `${event.availableSeats} seats available`
+                    {actualAvailableSeats > 0
+                      ? `${actualAvailableSeats} seats available`
                       : "Sold out"}
                   </p>
 
@@ -1397,7 +1431,7 @@ export default function EventDetails() {
 
               {/* PAYMENT */}
 
-              {event.availableSeats === 0 ? (
+              {actualAvailableSeats === 0 ? (
 
                 <div className="mt-7 rounded-2xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-5">
 
@@ -1458,16 +1492,15 @@ export default function EventDetails() {
                   className="w-full mt-7 py-4 rounded-2xl bg-indigo-600 text-white font-bold shadow-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
 
-                  {holdLoading
+                  {!user
+                    ? "Login to Book"
+                    : selectedSeats.length === 0
+                    ? "Select Seats"
+                    : holdLoading
                     ? "Holding Seats..."
                     : paymentLoading
                     ? "Opening Payment..."
-                    : user
-                    ? selectedSeats.length ===
-                      0
-                      ? "Select Seats"
-                      : "💳 Hold & Pay"
-                    : "Login to Book"}
+                    : "💳 Hold & Pay"}
 
                 </button>
 
